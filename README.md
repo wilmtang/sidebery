@@ -1,3 +1,9 @@
+# Better Sidebery
+
+This is a fork of the original Sidebery extension. The primary purpose of this fork is to create native tab group support.
+
+---
+
 <div align="center">
 
 <img src="docs/assets/readme-logo.svg" height="96" alt="Sidebery">
