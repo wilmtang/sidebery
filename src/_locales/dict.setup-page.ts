@@ -634,7 +634,7 @@ Liste de “sous-chaines” ou “/RegExp/” avec une entrée par ligne:
     ja: 'ナビゲーションバー',
   },
   'settings.nav_settings_group': {
-    en: 'Group page',
+    en: 'Tab groups',
     de: 'Gruppenseite',
     fr: 'Page de groupe',
     hu: 'Csoportoldal',
@@ -2042,7 +2042,7 @@ You can also set prefixes for each command type for faster navigation. Starting 
 
   // - Group page
   'settings.group_title': {
-    en: 'Group page',
+    en: 'Tab groups',
     de: 'Gruppenseite',
     fr: 'Page de groupe',
     hu: 'Csoportoldal',
@@ -2086,6 +2086,12 @@ You can also set prefixes for each command type for faster navigation. Starting 
   },
   'settings.native_groups_show_in_sidebar': {
     en: 'Show native Firefox tab groups in the sidebar',
+  },
+  'settings.native_groups_title': {
+    en: 'Native Firefox tab groups',
+  },
+  'settings.native_groups_show_colored_rails': {
+    en: 'Show colored group rails in the sidebar',
   },
   'settings.native_groups_create_sidebery_page': {
     en: 'Create a Sidebery group page when creating a native Firefox tab group',
@@ -3640,7 +3646,7 @@ Przykłady: "*", "ctrl+$", "ctrl+alt+g"`,
     ja: 'なし',
   },
   'settings.tabs_lvl_dots': {
-    en: 'Show marks to indicate tabs sub-tree levels',
+    en: 'Show tree/thread guide lines',
     de: 'Zeige Markierungen für Abstufung der Unterebenen der Tabs',
     fr: 'Afficher des guides pour indiquer le niveau d’arborescense des onglets',
     hu: 'Az utódlapok szintjének kijelzése',

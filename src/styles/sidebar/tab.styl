@@ -39,9 +39,11 @@
 #root[data-frame-color-scheme="dark"]
   --tabs-progress-bg: #ffffff16
   --tabs-lvl-opacity: .16
+  --tabs-tree-guide-color: #ffffff45
 #root[data-frame-color-scheme="light"]
   --tabs-progress-bg: #00000016
   --tabs-lvl-opacity: .3
+  --tabs-tree-guide-color: #00000052
 
 .Tab
   position: relative
@@ -144,6 +146,7 @@
   background-color: var(--tabs-normal-bg)
   box-shadow: var(--frame-el-shadow)
   overflow: hidden
+  border-left: 3px solid var(--native-group-color)
   &:before
     content: ''
     position: absolute
@@ -171,7 +174,7 @@
   width: 100%
   height: 100%
   background-color: var(--native-group-color)
-  opacity: .24
+  opacity: .18
 
 .NativeTabGroup .exp
   position: relative
@@ -245,16 +248,6 @@
   border-radius: var(--tabs-border-radius)
   background-color: var(--tabs-normal-bg)
   box-shadow: var(--frame-el-shadow)
-  &:after
-    content: ''
-    position: absolute
-    display: none
-    top: calc(-20% - var(--tabs-margin))
-    left: calc(var(--tabs-indent) / -2)
-    width: 1px
-    height: calc(var(--tabs-height) + var(--tabs-margin))
-    opacity: var(--tabs-lvl-opacity)
-    background-color: var(--tabs-normal-fg)
   &:before
     content: ''
     position: absolute
@@ -305,28 +298,96 @@
   width: 100%
   left: 0
 
-#root[data-tabs-tree-lvl-marks="true"] .Tab[data-pin="false"]:not([data-lvl="0"]) .body:after
-  display: block
-  box-shadow: calc(var(--tabs-indent) * -1) 0 0 0 var(--tabs-normal-fg),
-              calc(var(--tabs-indent) * -2) 0 0 0 var(--tabs-normal-fg),
-              calc(var(--tabs-indent) * -3) 0 0 0 var(--tabs-normal-fg),
-              calc(var(--tabs-indent) * -4) 0 0 0 var(--tabs-normal-fg),
-              calc(var(--tabs-indent) * -5) 0 0 0 var(--tabs-normal-fg),
-              calc(var(--tabs-indent) * -6) 0 0 0 var(--tabs-normal-fg),
-              calc(var(--tabs-indent) * -7) 0 0 0 var(--tabs-normal-fg),
-              calc(var(--tabs-indent) * -8) 0 0 0 var(--tabs-normal-fg),
-              calc(var(--tabs-indent) * -9) 0 0 0 var(--tabs-normal-fg),
-              calc(var(--tabs-indent) * -10) 0 0 0 var(--tabs-normal-fg),
-              calc(var(--tabs-indent) * -11) 0 0 0 var(--tabs-normal-fg),
-              calc(var(--tabs-indent) * -12) 0 0 0 var(--tabs-normal-fg),
-              calc(var(--tabs-indent) * -13) 0 0 0 var(--tabs-normal-fg),
-              calc(var(--tabs-indent) * -14) 0 0 0 var(--tabs-normal-fg),
-              calc(var(--tabs-indent) * -15) 0 0 0 var(--tabs-normal-fg),
-              calc(var(--tabs-indent) * -16) 0 0 0 var(--tabs-normal-fg)
-.Tab[data-parent="true"][data-folded="false"] + .Tab .body:after
-.Tab[data-edit="true"] + .Tab .body:after
-  background-color: transparent
-  background-image: linear-gradient(0deg, var(--tabs-normal-fg) 0, var(--tabs-normal-fg) 80%, transparent 80%, transparent)
+.Tab .tree-guides
+  position: absolute
+  top: calc(-1 * var(--tabs-margin))
+  left: calc(-1 * var(--tabs-indent) * var(--tab-lvl, 0))
+  width: calc(var(--tabs-indent) * var(--tab-lvl, 0))
+  height: calc(100% + var(--tabs-margin))
+  pointer-events: none
+  z-index: 0
+
+.Tab[data-lvl="0"] .tree-guides
+  --tab-lvl: 0
+.Tab[data-lvl="1"] .tree-guides
+  --tab-lvl: 1
+.Tab[data-lvl="2"] .tree-guides
+  --tab-lvl: 2
+.Tab[data-lvl="3"] .tree-guides
+  --tab-lvl: 3
+.Tab[data-lvl="4"] .tree-guides
+  --tab-lvl: 4
+.Tab[data-lvl="5"] .tree-guides
+  --tab-lvl: 5
+.Tab[data-lvl="6"] .tree-guides
+  --tab-lvl: 6
+.Tab[data-lvl="7"] .tree-guides
+  --tab-lvl: 7
+.Tab[data-lvl="8"] .tree-guides
+  --tab-lvl: 8
+.Tab[data-lvl="9"] .tree-guides
+  --tab-lvl: 9
+.Tab[data-lvl="10"] .tree-guides
+  --tab-lvl: 10
+.Tab[data-lvl="11"] .tree-guides
+  --tab-lvl: 11
+.Tab[data-lvl="12"] .tree-guides
+  --tab-lvl: 12
+.Tab[data-lvl="13"] .tree-guides
+  --tab-lvl: 13
+.Tab[data-lvl="14"] .tree-guides
+  --tab-lvl: 14
+.Tab[data-lvl="15"] .tree-guides
+  --tab-lvl: 15
+
+.Tab .tree-guide
+.Tab .tree-guide-connector
+  --guide-x: calc(var(--tabs-indent) * var(--guide-lvl) + var(--tabs-indent) / 2)
+  --guide-active-color: var(--guide-color, var(--tabs-tree-guide-color))
+  position: absolute
+  left: var(--guide-x)
+  width: 2px
+  opacity: .9
+  background-color: var(--guide-active-color)
+  border-radius: 1px
+
+.Tab .tree-guide
+  top: 0
+  height: 100%
+
+.Tab .tree-guide[data-continues="false"]
+  height: calc(var(--tabs-height) / 2 + var(--tabs-margin))
+
+.Tab .tree-guide-connector
+  top: 0
+  height: calc(var(--tabs-height) / 2 + var(--tabs-margin))
+
+.Tab .tree-guide-connector:after
+  content: ''
+  position: absolute
+  left: 0
+  top: calc(100% - 2px)
+  width: calc(var(--tabs-indent) / 2)
+  height: 2px
+  background-color: var(--guide-active-color)
+  border-radius: 1px
+
+#root[data-search="true"] .Tab .tree-guides
+  display: none
+
+.Tab .native-group-rail
+  position: absolute
+  top: 3px
+  left: 0
+  width: 3px
+  height: calc(100% - 6px)
+  border-radius: 0 2px 2px 0
+  background-color: var(--native-group-color)
+  z-index: 2
+
+.Tab[data-active="true"] .native-group-rail
+  top: 4px
+  height: calc(100% - 8px)
 
 // ---
 // -- Color layer

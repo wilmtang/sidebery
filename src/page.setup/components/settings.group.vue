@@ -10,11 +10,19 @@ section(ref="el")
     :default="DEFAULT_SETTINGS.groupLayout"
     :opts="Settings.getOpts('groupLayout')"
     @update:value="Settings.saveDebounced(150)")
+  .sub-title: .text {{translate('settings.native_groups_title')}}
   ToggleField(
     label="settings.native_groups_show_in_sidebar"
     v-model:value="Settings.state.nativeGroupsShowInSidebar"
     dbg="nativeGroupsShowInSidebar"
     :default="DEFAULT_SETTINGS.nativeGroupsShowInSidebar"
+    @update:value="Settings.saveDebounced(150)")
+  ToggleField(
+    label="settings.native_groups_show_colored_rails"
+    v-model:value="Settings.state.nativeGroupsShowColoredRails"
+    dbg="nativeGroupsShowColoredRails"
+    :default="DEFAULT_SETTINGS.nativeGroupsShowColoredRails"
+    :inactive="!Settings.state.nativeGroupsShowInSidebar"
     @update:value="Settings.saveDebounced(150)")
   ToggleField(
     label="settings.native_groups_create_sidebery_page"

@@ -13,7 +13,7 @@
     AnimatedTabList(:panel="panel")
       template(v-for="item in visibleItems" :key="item.key")
         NativeTabGroup(v-if="item.type === 'group'" :groupId="item.id")
-        TabComponent(v-else :tabId="item.id")
+        TabComponent(v-else :tabId="item.id" :guide="item.guide")
       NewTabBar(
         v-if="Settings.state.showNewTabBtns && Settings.state.newTabBarPosition === 'after_tabs'"
         :panel="panel")
@@ -62,22 +62,41 @@ const bottomBarSpaceNeeded =
   Settings.state.subPanelHistory
 let scrollBoxEl: HTMLElement | null = null
 
-type VisibleItem = { type: 'tab' | 'group'; id: ID; key: string }
+type TreeGuideSlot = {
+  lvl: number
+  color: string
+  continues: boolean
+}
+export type TabGuideInfo = {
+  slots: TreeGuideSlot[]
+  connectorColor: string
+  nativeGroupColor: string
+}
+type VisibleItem =
+  | { type: 'tab'; id: ID; key: string; guide: TabGuideInfo }
+  | { type: 'group'; id: ID; key: string }
+
 const visibleItems = computed<VisibleItem[]>(() => {
   Tabs.reactive.nativeGroupsVersion
   const items: VisibleItem[] = []
   let prevTab: Tab | undefined
+  const tabs = props.panel.reactive.visibleTabIds
+    .map(id => Tabs.byId[id])
+    .filter((tab): tab is Tab => !!tab)
+  const visibleTabs = tabs.filter(tab => Tabs.isTabVisibleInNativeGroup(tab))
 
-  for (const id of props.panel.reactive.visibleTabIds) {
-    const tab = Tabs.byId[id]
-    if (!tab) continue
-
+  for (const tab of tabs) {
     if (Tabs.shouldShowNativeGroupBeforeTab(tab, prevTab)) {
       items.push({ type: 'group', id: tab.groupId as ID, key: `g:${tab.groupId}` })
     }
 
     if (Tabs.isTabVisibleInNativeGroup(tab)) {
-      items.push({ type: 'tab', id, key: `t:${id}` })
+      items.push({
+        type: 'tab',
+        id: tab.id,
+        key: `t:${tab.id}`,
+        guide: getTabGuide(tab, visibleTabs),
+      })
     }
 
     prevTab = tab
@@ -85,6 +104,74 @@ const visibleItems = computed<VisibleItem[]>(() => {
 
   return items
 })
+
+function getTabGuide(tab: Tab, visibleTabs: Tab[]): TabGuideInfo {
+  const ancestors = getAncestors(tab)
+  const parent = ancestors[ancestors.length - 1]
+  const nativeGroup = Tabs.getNativeGroup(tab.groupId)
+  const nativeGroupColor =
+    Settings.state.nativeGroupsShowInSidebar &&
+    Settings.state.nativeGroupsShowColoredRails &&
+    nativeGroup
+      ? D.RGB_COLORS[nativeGroup.color ?? 'toolbar']
+      : ''
+
+  return {
+    slots: ancestors.map(ancestor => ({
+      lvl: ancestor.lvl,
+      color: getTreeGuideColor(ancestor),
+      continues: hasLaterVisibleDescendant(tab, ancestor.id, visibleTabs),
+    })),
+    connectorColor: parent ? getTreeGuideColor(parent) : '',
+    nativeGroupColor,
+  }
+}
+
+function getAncestors(tab: Tab): Tab[] {
+  const ancestors: Tab[] = []
+  const seen = new Set<ID>()
+  let parent = Tabs.byId[tab.parentId]
+
+  while (parent && !seen.has(parent.id)) {
+    seen.add(parent.id)
+    ancestors.unshift(parent)
+    parent = Tabs.byId[parent.parentId]
+  }
+
+  return ancestors
+}
+
+function hasLaterVisibleDescendant(tab: Tab, ancestorId: ID, visibleTabs: Tab[]): boolean {
+  const index = visibleTabs.indexOf(tab)
+  if (index === -1) return false
+
+  for (let i = index + 1; i < visibleTabs.length; i++) {
+    if (isDescendantOf(visibleTabs[i], ancestorId)) return true
+  }
+
+  return false
+}
+
+function isDescendantOf(tab: Tab, ancestorId: ID): boolean {
+  const seen = new Set<ID>()
+  let parent = Tabs.byId[tab.parentId]
+
+  while (parent && !seen.has(parent.id)) {
+    if (parent.id === ancestorId) return true
+    seen.add(parent.id)
+    parent = Tabs.byId[parent.parentId]
+  }
+
+  return false
+}
+
+function getTreeGuideColor(tab: Tab): string {
+  if (Settings.state.colorizeTabsBranches && tab.reactive.branchColor) {
+    return tab.reactive.branchColor
+  }
+
+  return ''
+}
 
 onMounted(() => {
   if (scrollBox.value) {

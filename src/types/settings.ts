@@ -55,6 +55,7 @@ export interface SettingsState {
   groupLayout: (typeof SETTINGS_OPTIONS.groupLayout)[number]
   nativeGroupsCreateSideberyPage: boolean
   nativeGroupsShowInSidebar: boolean
+  nativeGroupsShowColoredRails: boolean
 
   // Containers
   containersSortByName: boolean

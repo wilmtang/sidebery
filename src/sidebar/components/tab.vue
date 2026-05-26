@@ -18,6 +18,7 @@
   :data-folded="tab.reactive.folded"
   :data-color="tab.reactive.containerColor"
   :data-colorized="!!tabColor"
+  :data-native-group="!!guide?.nativeGroupColor"
   :data-unread="tab.reactive.unread"
   :data-edit="tab.reactive.customTitleEdit"
   :title="tab.reactive.tooltip"
@@ -31,6 +32,18 @@
   @dblclick.prevent.stop="onDoubleClick")
   .dnd-layer(v-once data-dnd-type="tab" :data-dnd-id="tab.id")
   .body
+    .tree-guides(v-if="!iconOnly && Settings.state.tabsLvlDots && !tab.reactive.customTitleEdit")
+      .tree-guide(
+        v-for="slot in guide?.slots"
+        :key="slot.lvl"
+        :data-continues="slot.continues"
+        :style="{ '--guide-lvl': slot.lvl, '--guide-color': slot.color || undefined }")
+      .tree-guide-connector(
+        v-if="tab.reactive.lvl > 0"
+        :style="{ '--guide-lvl': tab.reactive.lvl - 1, '--guide-color': guide?.connectorColor || undefined }")
+    .native-group-rail(
+      v-if="guide?.nativeGroupColor"
+      :style="{ '--native-group-color': guide.nativeGroupColor }")
     .color-layer(v-if="tabColor" :style="{ '--tab-color': tabColor }")
     .flash-fx(ref="flashFxEl")
     .unread-mark(v-if="tab.reactive.unread")
@@ -94,9 +107,11 @@ import { NOID, RGB_COLORS } from 'src/defaults'
 import * as Utils from 'src/utils'
 import * as Logs from 'src/services/logs'
 import * as Preview from 'src/services/tabs.fg.preview'
+import type { TabGuideInfo } from './panel.tabs.vue'
 
-const props = defineProps<{ tabId: ID }>()
+const props = defineProps<{ tabId: ID; guide?: TabGuideInfo }>()
 const tab = Tabs.byId[props.tabId] as Tab
+const guide = computed(() => props.guide)
 const iconOnly =
   tab.pinned &&
   (!Settings.state.pinnedTabsList ||
