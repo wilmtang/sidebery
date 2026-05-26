@@ -152,6 +152,7 @@ export const enum MenuType {
   TabsPanel = 7,
   BookmarksPanel = 8,
   Panel = 9,
+  NativeTabGroup = 10,
 }
 
 // ---

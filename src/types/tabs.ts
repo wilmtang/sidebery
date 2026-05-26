@@ -79,6 +79,10 @@ export interface ReactiveTabProps {
   isGroup: boolean
 }
 
+export interface NativeTabGroup extends browser.tabGroups.TabGroup {
+  title: string
+}
+
 export interface BgTab extends NativeTab {
   lvl?: number
   parentId?: ID

@@ -11,7 +11,9 @@
   ScrollBox(ref="scrollBox" :preScroll="D.PRE_SCROLL")
     DragAndDropPointer(:panelId="panel.id" :subPanel="false")
     AnimatedTabList(:panel="panel")
-      TabComponent(v-for="id in panel.reactive.visibleTabIds" :key="id" :tabId="id")
+      template(v-for="item in visibleItems" :key="item.key")
+        NativeTabGroup(v-if="item.type === 'group'" :groupId="item.id")
+        TabComponent(v-else :tabId="item.id")
       NewTabBar(
         v-if="Settings.state.showNewTabBtns && Settings.state.newTabBarPosition === 'after_tabs'"
         :panel="panel")
@@ -30,9 +32,9 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { translate } from 'src/dict'
-import type { ScrollBoxComponent, TabsPanel } from 'src/types'
+import type { ScrollBoxComponent, Tab, TabsPanel } from 'src/types'
 import * as E from 'src/enums'
 import * as D from 'src/defaults'
 import * as Settings from 'src/services/settings'
@@ -46,6 +48,7 @@ import * as Search from 'src/services/search.fg'
 import PinnedTabsBar from './bar.pinned-tabs.vue'
 import ScrollBox from 'src/components/scroll-box.vue'
 import TabComponent from './tab.vue'
+import NativeTabGroup from './native-tab-group.vue'
 import PanelPlaceholder from './panel-placeholder.vue'
 import NewTabBar from './bar.new-tab.vue'
 import DragAndDropPointer from './dnd-pointer.vue'
@@ -58,6 +61,30 @@ const bottomBarSpaceNeeded =
   Settings.state.subPanelBookmarks ||
   Settings.state.subPanelHistory
 let scrollBoxEl: HTMLElement | null = null
+
+type VisibleItem = { type: 'tab' | 'group'; id: ID; key: string }
+const visibleItems = computed<VisibleItem[]>(() => {
+  Tabs.reactive.nativeGroupsVersion
+  const items: VisibleItem[] = []
+  let prevTab: Tab | undefined
+
+  for (const id of props.panel.reactive.visibleTabIds) {
+    const tab = Tabs.byId[id]
+    if (!tab) continue
+
+    if (Tabs.shouldShowNativeGroupBeforeTab(tab, prevTab)) {
+      items.push({ type: 'group', id: tab.groupId as ID, key: `g:${tab.groupId}` })
+    }
+
+    if (Tabs.isTabVisibleInNativeGroup(tab)) {
+      items.push({ type: 'tab', id, key: `t:${id}` })
+    }
+
+    prevTab = tab
+  }
+
+  return items
+})
 
 onMounted(() => {
   if (scrollBox.value) {

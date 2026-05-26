@@ -39,6 +39,7 @@
     "menus",
     "menus.overrideContext",
     "search",
+    "tabGroups",
     "theme",
     "identity"
   ],

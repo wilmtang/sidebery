@@ -65,8 +65,34 @@ export async function groupTabs(tabIds: ID[], conf?: T.NewGroupConfig): Promise<
   const noConfig = !conf
   if (!conf) conf = {}
 
-  // Get sorted list of tabs
-  const tabs = []
+  const tabs = getTabsForGrouping(tabIds)
+
+  if (!tabs.length) return
+  if (
+    !Tabs.nativeGroupsSupported() &&
+    Settings.state.tabsTreeLimit !== 'none' &&
+    tabs[0].lvl >= Settings.state.tabsTreeLimit
+  ) {
+    return
+  }
+
+  if (!conf.title) conf.title = getTitleForNewGroup(tabs)
+
+  // Show config popup
+  if (noConfig && Settings.state.showNewGroupConf) {
+    const result = await Tabs.openGroupConfigPopup(conf)
+    if (result === GroupConfigResult.Cancel) return
+  }
+
+  if (Tabs.nativeGroupsSupported()) {
+    return createNativeTabGroup(tabs, conf)
+  }
+
+  return createSideberyGroupFromTabs(tabs, conf)
+}
+
+function getTabsForGrouping(tabIds: ID[]): T.Tab[] {
+  const tabs: T.Tab[] = []
   for (const t of Tabs.list) {
     if (tabIds.includes(t.id)) tabs.push(t)
     else if (tabIds.includes(t.parentId)) {
@@ -74,37 +100,54 @@ export async function groupTabs(tabIds: ID[], conf?: T.NewGroupConfig): Promise<
       tabs.push(t)
     }
   }
+  return tabs
+}
 
-  if (!tabs.length) return
-  if (Settings.state.tabsTreeLimit !== 'none' && tabs[0].lvl >= Settings.state.tabsTreeLimit) return
+function getTitleForNewGroup(tabs: T.Tab[]): string {
+  const titles = tabs.map(t => t.title)
+  const commonPart = Utils.commonSubStr(titles)
+  const isOk = commonPart ? commonPart[0] === commonPart[0].toUpperCase() : false
+  let groupTitle = commonPart
+    .replace(/^(\s|\.|_|-|—|–|\(|\)|\/|=|;|:)+/g, ' ')
+    .replace(/(\s|\.|_|-|—|–|\(|\)|\/|=|;|:)+$/g, ' ')
+    .trim()
 
-  // Find title for group tab
-  if (!conf.title) {
-    const titles = tabs.map(t => t.title)
-    const commonPart = Utils.commonSubStr(titles)
-    const isOk = commonPart ? commonPart[0] === commonPart[0].toUpperCase() : false
-    let groupTitle = commonPart
-      .replace(/^(\s|\.|_|-|—|–|\(|\)|\/|=|;|:)+/g, ' ')
-      .replace(/(\s|\.|_|-|—|–|\(|\)|\/|=|;|:)+$/g, ' ')
-      .trim()
-
-    if (!isOk || groupTitle.length < 4) {
-      const hosts = tabs.filter(t => !t.url.startsWith('about:')).map(t => t.url.split('/')[2])
-      groupTitle = Utils.commonSubStr(hosts)
-      if (groupTitle.startsWith('.')) groupTitle = groupTitle.slice(1)
-      groupTitle = groupTitle.replace(/^www\./, '')
-    }
-
-    if (!isOk || groupTitle.length < 4) groupTitle = tabs[0].title
-
-    conf.title = groupTitle
+  if (!isOk || groupTitle.length < 4) {
+    const hosts = tabs.filter(t => !t.url.startsWith('about:')).map(t => t.url.split('/')[2])
+    groupTitle = Utils.commonSubStr(hosts)
+    if (groupTitle.startsWith('.')) groupTitle = groupTitle.slice(1)
+    groupTitle = groupTitle.replace(/^www\./, '')
   }
 
-  // Show config popup
-  if (noConfig && Settings.state.showNewGroupConf) {
-    const result = await Tabs.openGroupConfigPopup(conf)
-    if (result === GroupConfigResult.Cancel) return
+  if (!isOk || groupTitle.length < 4) groupTitle = tabs[0].title
+
+  return groupTitle
+}
+
+async function createNativeTabGroup(tabs: T.Tab[], conf: T.NewGroupConfig): Promise<void> {
+  const groupId = await browser.tabs.group({ tabIds: tabs.map(t => t.id) }).catch(err => {
+    Logs.err('Tabs.createNativeTabGroup: Cannot group tabs:', err)
+    return NOID
+  })
+  if (groupId === NOID) return
+
+  if (conf.title) {
+    await browser.tabGroups.update(groupId, { title: conf.title }).catch(err => {
+      Logs.warn('Tabs.createNativeTabGroup: Cannot set group title:', err)
+    })
   }
+
+  if (conf.active) {
+    browser.tabs.update(tabs[0].id, { active: true }).catch(() => undefined)
+  }
+
+  if (Settings.state.nativeGroupsCreateSideberyPage) {
+    await Tabs.createSideberyGroupPage(groupId)
+  }
+}
+
+async function createSideberyGroupFromTabs(tabs: T.Tab[], conf: T.NewGroupConfig): Promise<void> {
+  if (!Settings.state.tabsTree) return
 
   // Get panel
   const panelId = tabs[0].panelId
@@ -126,17 +169,6 @@ export async function groupTabs(tabIds: ID[], conf?: T.NewGroupConfig): Promise<
     conf.pinnedTab.relGroupId = groupTab.id
   }
 
-  // Move tabs if needed
-  let properIndex = tabs[0].index
-  const tabsToMove: T.Tab[] = []
-  let indexToMoveTo = -1
-  for (const tab of tabs) {
-    if (tab.index !== properIndex) {
-      if (indexToMoveTo === -1) indexToMoveTo = properIndex
-      tabsToMove.push(tab)
-    }
-    properIndex++
-  }
   const dst = { index: groupTab.index + 1, panelId: panel.id, parentId: groupTab.id }
   await Tabs.move(tabs, {}, dst)
 }
@@ -185,6 +217,10 @@ export async function getGroupInfo(groupTabId: ID): Promise<T.GroupInfo | null> 
   if (!groupTab) {
     Logs.warn('Tabs.getGroupInfo: No group tab:', groupTabId)
     return null
+  }
+
+  if (Tabs.hasNativeGroup(groupTab)) {
+    return getNativeGroupInfo(groupTab)
   }
 
   const out: T.GroupInfo = { id: groupTab.id, tabs: [] as T.GroupedTabInfo[], favicons: {} }
@@ -263,6 +299,7 @@ export function updateGroupOrItsChild(groupTab: T.Tab, childId = NOID, delay = 5
   Logs.info('tabs.fg.groups.updateGroupOrItsChild:', groupTab.id, childId, delay)
 
   if (!groupTab.isGroup) return
+  if (Tabs.hasNativeGroup(groupTab)) childId = NOID
 
   let fullUpdate = childId === NOID
   let updInfo = updateGroupChildBuf.get(groupTab)
@@ -322,6 +359,8 @@ function updateGroupChildren(groupTab: T.Tab, childIds: Iterable<ID>) {
 }
 
 function updateGroup(groupTab: T.Tab) {
+  if (Tabs.hasNativeGroup(groupTab)) return updateNativeGroup(groupTab)
+
   const tabsCount = Tabs.list.length
   const tabs: T.GroupedTabInfo[] = []
   let subGroupLvl = null
@@ -351,6 +390,34 @@ function updateGroup(groupTab: T.Tab) {
   AddonIPPC.callGroupPage(groupTab, 'update', msg)
 }
 
+function getNativeGroupInfo(groupTab: T.Tab): T.GroupInfo {
+  const out: T.GroupInfo = { id: groupTab.id, tabs: [] as T.GroupedTabInfo[], favicons: {} }
+  if (!Tabs.hasNativeGroup(groupTab) || groupTab.groupId === undefined) return out
+
+  const groupTabs = Tabs.getNativeGroupTabs(groupTab.groupId)
+  const baseIndex = groupTabs[0]?.index ?? groupTab.index + 1
+  for (const tab of groupTabs) {
+    const tabInfo = getNativeGroupedTabInfo(tab, baseIndex)
+    const domain = Utils.getDomainOf(tab.url)
+    if (tabInfo.favIconUrl && domain) {
+      out.favicons[domain] = tabInfo.favIconUrl
+      delete tabInfo.favIconUrl
+    }
+    out.tabs.push(tabInfo)
+  }
+
+  return out
+}
+
+function updateNativeGroup(groupTab: T.Tab) {
+  const groupInfo = getNativeGroupInfo(groupTab)
+  const msg: T.GroupUpdMsg = {
+    windowId: Windows.id,
+    tabs: groupInfo.tabs,
+  }
+  AddonIPPC.callGroupPage(groupTab, 'update', msg)
+}
+
 export function getGroupedTabInfo(tab: T.Tab, groupTab: T.Tab): T.GroupedTabInfo {
   const cachedFav = Favicons.getFavicon(tab.url)
   let favIconUrl = tab.favIconUrl ?? ''
@@ -373,6 +440,13 @@ export function getGroupedTabInfo(tab: T.Tab, groupTab: T.Tab): T.GroupedTabInfo
     discarded: !!tab.discarded,
     favIconUrl,
   }
+}
+
+function getNativeGroupedTabInfo(tab: T.Tab, baseIndex: number): T.GroupedTabInfo {
+  const info = getGroupedTabInfo(tab, tab)
+  info.index = tab.index - baseIndex
+  info.lvl = tab.lvl
+  return info
 }
 
 export async function setGroupName(groupTabId: ID, newName: string) {

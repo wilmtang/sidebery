@@ -27,6 +27,7 @@ type TargetType =
   | 'nav'
   | 'hiddenPanel'
   | 'panel'
+  | 'native-group'
   | 'tab'
   | 'tab.expand'
   | 'tab.audio'

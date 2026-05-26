@@ -22,6 +22,7 @@ import * as Tabs from 'src/services/tabs.fg'
 
 export * from 'src/services/tabs.fg.handlers'
 export * from 'src/services/tabs.fg.groups'
+export * from 'src/services/tabs.fg.native-groups'
 export * from 'src/services/tabs.fg.shadow'
 export * from 'src/services/tabs.fg.scroll'
 export * from 'src/services/tabs.fg.edit-title'
@@ -34,6 +35,9 @@ export * from 'src/services/tabs.fg.sorting'
 
 export interface TabsReactiveState {
   pinnedIds: ID[]
+  nativeGroups: Record<ID, T.NativeTabGroup>
+  nativeGroupsSelectedId: ID
+  nativeGroupsVersion: number
   recentlyRemovedLen: number
   inlinePreview: boolean
   inlinePreviewImg: string
@@ -43,6 +47,9 @@ export interface TabsReactiveState {
 
 export let reactive: TabsReactiveState = {
   pinnedIds: [],
+  nativeGroups: {},
+  nativeGroupsSelectedId: D.NOID,
+  nativeGroupsVersion: 0,
   recentlyRemovedLen: 0,
   inlinePreview: false,
   inlinePreviewImg: '',
@@ -203,6 +210,8 @@ export async function load(src?: LoadSrc): Promise<void> {
     count: 10,
   })
 
+  await Tabs.loadNativeGroups()
+
   // Scroll to active tab
   const activeTab = Tabs.byId[Tabs.activeId]
   if (activeTab && !activeTab.pinned) Tabs.scrollToTab(activeTab.id)
@@ -260,6 +269,9 @@ export function unload(): void {
   Tabs.cancelCachingTabsData()
 
   reactive.pinnedIds = []
+  reactive.nativeGroups = {}
+  reactive.nativeGroupsSelectedId = D.NOID
+  reactive.nativeGroupsVersion = 0
   reactive.recentlyRemovedLen = 0
   reactive.inlinePreviewImg = ''
   list = []

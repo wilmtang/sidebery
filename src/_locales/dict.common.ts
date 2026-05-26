@@ -1977,6 +1977,21 @@ export const commonTranslations: Translations = {
     zh_TW: '分給群組',
     ja: 'グループ',
   },
+  'menu.native_group.create_sidebery_page': {
+    en: 'Create Sidebery group page',
+  },
+  'menu.native_group.rename': {
+    en: 'Rename group',
+  },
+  'menu.native_group.collapse': {
+    en: 'Collapse group',
+  },
+  'menu.native_group.expand': {
+    en: 'Expand group',
+  },
+  'menu.native_group.ungroup': {
+    en: 'Ungroup tabs',
+  },
   'menu.tab.flatten': {
     en: 'Flatten',
     de: 'Plätten',

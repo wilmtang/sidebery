@@ -119,6 +119,103 @@
   opacity: 0
   transform: translateY(-8px)
 
+.NativeTabGroup
+  position: relative
+  contain: size layout style
+  width: calc(100% - var(--tabs-margin) * 2)
+  height: calc(var(--tabs-height) + var(--tabs-margin))
+  margin: 0 var(--tabs-margin)
+  padding-bottom: var(--tabs-margin)
+  z-index: 12
+  transition: transform var(--d-fast), opacity var(--d-fast), padding var(--d-fast)
+
+.NativeTabGroup.-hidden
+  opacity: 0
+  transform: translateY(-8px)
+
+.NativeTabGroup .body
+  position: relative
+  display: flex
+  width: 100%
+  height: 100%
+  align-items: center
+  gap: var(--tabs-inner-gap)
+  border-radius: var(--tabs-border-radius)
+  background-color: var(--tabs-normal-bg)
+  box-shadow: var(--frame-el-shadow)
+  overflow: hidden
+  &:before
+    content: ''
+    position: absolute
+    top: 0
+    left: 0
+    width: 100%
+    height: 100%
+    border-radius: var(--tabs-border-radius)
+    z-index: 1
+
+.NativeTabGroup:hover .body:before
+  background-color: var(--frame-el-overlay-hover-bg)
+
+.NativeTabGroup:active .body:before
+  background-color: var(--frame-el-overlay-clicked-bg)
+
+.NativeTabGroup[data-selected="true"] .body:before
+  background-color: var(--frame-el-overlay-selected-bg)
+  box-shadow: inset 0 0 0 1px var(--frame-el-overlay-selected-border)
+
+.NativeTabGroup .color-layer
+  position: absolute
+  top: 0
+  left: 0
+  width: 100%
+  height: 100%
+  background-color: var(--native-group-color)
+  opacity: .24
+
+.NativeTabGroup .exp
+  position: relative
+  width: 16px
+  height: 16px
+  margin-left: calc(var(--tabs-inner-gap) + 2px)
+  flex-shrink: 0
+  z-index: 2
+  transition: transform var(--d-fast)
+
+.NativeTabGroup[data-collapsed="true"] .exp
+  transform: rotateZ(-90deg)
+
+.NativeTabGroup .exp-icon
+  width: 16px
+  height: 16px
+  fill: var(--tabs-normal-fg)
+  opacity: .8
+
+.NativeTabGroup .title
+  position: relative
+  min-width: 0
+  overflow: hidden
+  text-overflow: ellipsis
+  white-space: nowrap
+  flex: 1
+  z-index: 2
+  font: var(--tabs-font)
+  color: var(--tabs-normal-fg)
+
+.NativeTabGroup .count
+  position: relative
+  min-width: 18px
+  height: 18px
+  margin-right: var(--tabs-inner-gap)
+  padding: 0 5px
+  border-radius: 9px
+  z-index: 2
+  font: var(--tabs-count-font)
+  line-height: 18px
+  text-align: center
+  color: var(--tabs-normal-fg)
+  background-color: var(--frame-el-overlay-selected-bg)
+
 // ---
 // -- Set outline for active colored tabs
 // -

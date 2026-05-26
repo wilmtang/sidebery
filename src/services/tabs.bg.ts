@@ -172,7 +172,16 @@ export function setupListeners(): void {
   browser.tabs.onCreated.addListener(onTabCreated)
   browser.tabs.onRemoved.addListener(onTabRemoved)
   browser.tabs.onUpdated.addListener(onTabUpdated, {
-    properties: ['pinned', 'title', 'status', 'favIconUrl', 'url', 'hidden', 'discarded'],
+    properties: [
+      'pinned',
+      'title',
+      'status',
+      'favIconUrl',
+      'url',
+      'hidden',
+      'discarded',
+      'groupId',
+    ],
   })
   browser.tabs.onActivated.addListener(onTabActivated)
   browser.tabs.onMoved.addListener(onTabMoved)

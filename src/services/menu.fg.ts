@@ -154,6 +154,8 @@ export function open(type: MenuType, x?: number, y?: number, customForced?: bool
     blocks = createMenuBlocks(Menu.bookmarksPanelConf, customForced)
   } else if (type === MenuType.Panel) {
     blocks = createMenuBlocks(D.OTHER_PANELS_MENU, customForced)
+  } else if (type === MenuType.NativeTabGroup) {
+    blocks = createMenuBlocks(D.NATIVE_TAB_GROUP_MENU, customForced)
   }
   if (!blocks?.length) return
 

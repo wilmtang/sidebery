@@ -501,6 +501,18 @@ export async function open(
     const tab = await browser.tabs.create(conf)
     idsMap[item.id] = tab.id
 
+    const nativeGroupId =
+      dst.nativeGroupId ?? (Tabs.hasNativeGroup(parent) ? parent?.groupId : D.NOID)
+    if (
+      nativeGroupId !== undefined &&
+      nativeGroupId !== D.NOID &&
+      nativeGroupId !== Tabs.getNativeGroupIdNone()
+    ) {
+      browser.tabs.group({ tabIds: tab.id, groupId: nativeGroupId }).catch(err => {
+        Logs.warn('Tabs.open: Cannot add new tab to native group:', err)
+      })
+    }
+
     if (item.customTitle) {
       const newTab = Tabs.byId[tab.id]
       if (newTab) {

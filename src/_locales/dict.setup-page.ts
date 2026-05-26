@@ -2084,6 +2084,12 @@ You can also set prefixes for each command type for faster navigation. Starting 
     zh: '列表',
     ja: 'リスト',
   },
+  'settings.native_groups_show_in_sidebar': {
+    en: 'Show native Firefox tab groups in the sidebar',
+  },
+  'settings.native_groups_create_sidebery_page': {
+    en: 'Create a Sidebery group page when creating a native Firefox tab group',
+  },
 
   // - Containers
   'settings.containers_title': {

@@ -187,6 +187,7 @@ export interface DstPlaceInfo {
   inside?: boolean
   pinned?: boolean
   containerId?: string
+  nativeGroupId?: ID
   windowId?: ID
   incognito?: boolean
   windowChooseConf?: WindowChoosingDetails

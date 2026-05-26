@@ -128,6 +128,8 @@ export function updateSettings(settings?: SettingsState | null): void {
   const markWindowPreface = prev.markWindowPreface !== next.markWindowPreface
   const tabsUnreadMark = prev.tabsUnreadMark !== next.tabsUnreadMark
   const copyTemplates = prev.copyTemplates !== next.copyTemplates
+  const nativeGroupsShowInSidebar =
+    prev.nativeGroupsShowInSidebar !== next.nativeGroupsShowInSidebar
 
   // Update settings of this instance
   Utils.updateObject(Settings.state, settings, Settings.state)
@@ -203,6 +205,10 @@ export function updateSettings(settings?: SettingsState | null): void {
   if (Info.isSidebar && updateSidebarTitleChanged) Sidebar.updateSidebarTitle(0)
 
   if (pinnedTabsPositionChanged && Sidebar.hasTabs) Sidebar.recalcTabsPanels()
+  if (nativeGroupsShowInSidebar && Sidebar.hasTabs) {
+    Sidebar.recalcVisibleTabs()
+    Sidebar.updatePanelBoundsDebounced(128)
+  }
 
   if (Sidebar.reMountSidebar) Sidebar.reMountSidebar()
 

@@ -147,6 +147,13 @@ export const NEW_TAB_MENU: MenuConf = [
   'manageContainers',
 ]
 
+export const NATIVE_TAB_GROUP_MENU: MenuConf = [
+  'createSideberyGroupPage',
+  'renameNativeTabGroup',
+  'toggleNativeTabGroup',
+  'ungroupNativeTabGroup',
+]
+
 // TODO: rm
 export const OTHER_PANELS_MENU: MenuConf = [
   'openPanelConfig',

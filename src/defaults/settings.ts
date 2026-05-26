@@ -51,6 +51,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
 
   // Group page
   groupLayout: 'grid',
+  nativeGroupsCreateSideberyPage: false,
+  nativeGroupsShowInSidebar: true,
 
   // Containers
   containersSortByName: false,

@@ -518,6 +518,7 @@ export function deselectNavItem(id: ID, preserveLocked?: boolean): void {
 }
 
 export function resetSelection(forced?: boolean, preserveLocked?: boolean): void {
+  Tabs.reactive.nativeGroupsSelectedId = NOID
   if (!forced && resetStop) return
   if (!selected.size) return
 

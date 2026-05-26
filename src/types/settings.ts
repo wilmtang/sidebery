@@ -53,6 +53,8 @@ export interface SettingsState {
 
   // Group page
   groupLayout: (typeof SETTINGS_OPTIONS.groupLayout)[number]
+  nativeGroupsCreateSideberyPage: boolean
+  nativeGroupsShowInSidebar: boolean
 
   // Containers
   containersSortByName: boolean

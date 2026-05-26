@@ -19,6 +19,8 @@ declare namespace browser {
 
   type ColorName =
     | 'blue'
+    | 'cyan'
+    | 'grey'
     | 'turquoise'
     | 'green'
     | 'yellow'
@@ -360,7 +362,7 @@ declare namespace browser {
      * Adds one or more tabs to a specified group, or if no group is specified,
      * adds the given tabs to a newly created group.
      */
-    function group(options: GroupOpts): Promise<void>
+    function group(options: GroupOpts): Promise<ID>
     /**
      * Removes one or more tabs from their respective groups.
      * If any groups become empty, they are deleted.
@@ -582,6 +584,57 @@ declare namespace browser {
 
     const onAdded: EventTarget<PermissionsChangeListener>
     const onRemoved: EventTarget<PermissionsChangeListener>
+  }
+
+  namespace tabGroups {
+    type Color =
+      | 'blue'
+      | 'cyan'
+      | 'grey'
+      | 'green'
+      | 'orange'
+      | 'pink'
+      | 'purple'
+      | 'red'
+      | 'yellow'
+
+    interface TabGroup {
+      collapsed: boolean
+      color: Color
+      id: ID
+      title?: string
+      windowId: ID
+    }
+
+    interface QueryInfo {
+      collapsed?: boolean
+      color?: Color
+      title?: string
+      windowId?: ID
+    }
+
+    interface MoveProperties {
+      index: number
+      windowId?: ID
+    }
+
+    interface UpdateProperties {
+      collapsed?: boolean
+      color?: Color
+      title?: string
+    }
+
+    const TAB_GROUP_ID_NONE: ID
+
+    function get(groupId: ID): Promise<TabGroup>
+    function move(groupId: ID, moveProperties: MoveProperties): Promise<TabGroup>
+    function query(queryInfo: QueryInfo): Promise<TabGroup[]>
+    function update(groupId: ID, updateProperties: UpdateProperties): Promise<TabGroup>
+
+    const onCreated: EventTarget<(group: TabGroup) => void>
+    const onMoved: EventTarget<(group: TabGroup) => void>
+    const onRemoved: EventTarget<(group: TabGroup) => void>
+    const onUpdated: EventTarget<(group: TabGroup) => void>
   }
 
   /**

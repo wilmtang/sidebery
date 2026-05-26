@@ -316,7 +316,60 @@ export const tabsMenuOptions: Record<string, () => MenuOption | MenuOption[] | u
       onClick: () => Tabs.groupTabs(Selection.ids()),
     }
     const firstTab = Tabs.byId[Selection.getFirst()]
-    if (!Settings.state.tabsTree || firstTab?.pinned) option.inactive = true
+    if ((!Tabs.nativeGroupsSupported() && !Settings.state.tabsTree) || firstTab?.pinned) {
+      option.inactive = true
+    }
+    if (!Settings.state.ctxMenuRenderInact && option.inactive) return
+    return option
+  },
+
+  createSideberyGroupPage: () => {
+    const groupId = Tabs.reactive.nativeGroupsSelectedId
+    const option: MenuOption = {
+      label: translate('menu.native_group.create_sidebery_page'),
+      icon: 'icon_group',
+      onClick: () => Tabs.createSideberyGroupPage(groupId),
+    }
+    if (!Tabs.getNativeGroup(groupId) || Tabs.getSideberyGroupPageForNativeGroup(groupId)) {
+      option.inactive = true
+    }
+    if (!Settings.state.ctxMenuRenderInact && option.inactive) return
+    return option
+  },
+
+  renameNativeTabGroup: () => {
+    const groupId = Tabs.reactive.nativeGroupsSelectedId
+    const option: MenuOption = {
+      label: translate('menu.native_group.rename'),
+      icon: 'icon_edit',
+      onClick: () => Tabs.renameNativeGroup(groupId),
+    }
+    if (!Tabs.getNativeGroup(groupId)) option.inactive = true
+    if (!Settings.state.ctxMenuRenderInact && option.inactive) return
+    return option
+  },
+
+  toggleNativeTabGroup: () => {
+    const groupId = Tabs.reactive.nativeGroupsSelectedId
+    const group = Tabs.getNativeGroup(groupId)
+    const option: MenuOption = {
+      label: translate(`menu.native_group.${group?.collapsed ? 'expand' : 'collapse'}`),
+      icon: 'icon_expand',
+      onClick: () => Tabs.toggleNativeGroupCollapsed(groupId),
+    }
+    if (!group) option.inactive = true
+    if (!Settings.state.ctxMenuRenderInact && option.inactive) return
+    return option
+  },
+
+  ungroupNativeTabGroup: () => {
+    const groupId = Tabs.reactive.nativeGroupsSelectedId
+    const option: MenuOption = {
+      label: translate('menu.native_group.ungroup'),
+      icon: 'icon_flatten',
+      onClick: () => Tabs.ungroupNativeGroup(groupId),
+    }
+    if (!Tabs.getNativeGroup(groupId)) option.inactive = true
     if (!Settings.state.ctxMenuRenderInact && option.inactive) return
     return option
   },

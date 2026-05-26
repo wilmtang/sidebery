@@ -701,9 +701,18 @@ function calcTabsBounds(panel: T.TabsPanel): T.ItemBounds[] {
   let overallHeight = -marginA
   const tabs = panel?.filteredTabs ?? Tabs.list
   const filtered = !!panel?.filteredTabs
+  let prevTab: T.Tab | undefined
   for (const tab of tabs) {
     if ((!filtered && tab.invisible) || tab.pinned) continue
     if (tab.panelId !== panel.id) continue
+
+    if (Tabs.shouldShowNativeGroupBeforeTab(tab, prevTab)) {
+      overallHeight += th + tm
+    }
+
+    const tabIsVisible = Tabs.isTabVisibleInNativeGroup(tab)
+    prevTab = tab
+    if (!tabIsVisible) continue
 
     result.push({
       type: E.ItemBoundsType.Tab,

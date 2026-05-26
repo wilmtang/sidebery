@@ -33,6 +33,7 @@ export function setupTabsListeners(): void {
     properties: [
       'audible', 'discarded', 'favIconUrl', 'hidden',
       'mutedInfo', 'pinned', 'status', 'title', 'url',
+      'groupId',
     ],
   })
   browser.tabs.onRemoved.addListener(onTabRemoved)
@@ -40,6 +41,7 @@ export function setupTabsListeners(): void {
   browser.tabs.onDetached.addListener(onTabDetached)
   browser.tabs.onAttached.addListener(onTabAttached)
   browser.tabs.onActivated.addListener(onTabActivated)
+  Tabs.setupNativeGroupsListeners()
   listenersAreSet = true
 }
 
@@ -51,6 +53,7 @@ export function resetTabsListeners(): void {
   browser.tabs.onDetached.removeListener(onTabDetached)
   browser.tabs.onAttached.removeListener(onTabAttached)
   browser.tabs.onActivated.removeListener(onTabActivated)
+  Tabs.resetNativeGroupsListeners()
   listenersAreSet = false
 }
 
@@ -734,6 +737,12 @@ function onTabUpdated(tabId: ID, change: browser.tabs.ChangeInfo, nativeTab: Nat
   }
 
   // Logs.info('Tabs.onTabUpdated:', tabId, Object.keys(change))
+
+  if (change.groupId !== undefined && change.groupId !== tab.groupId) {
+    const oldGroupId = tab.groupId
+    tab.groupId = change.groupId
+    Tabs.onNativeGroupMembershipChanged(tab, oldGroupId, change.groupId)
+  }
 
   // Discarded
   if (change.discarded !== undefined) {
