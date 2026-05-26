@@ -304,9 +304,10 @@
   left: 0
 
 .Tab .tree-guides
+  --tabs-tree-guide-offset: 0px
   position: absolute
   top: calc(-1 * var(--tabs-margin))
-  left: calc(-1 * var(--tabs-indent) * var(--tab-lvl, 0))
+  left: calc(var(--tabs-tree-guide-offset) - var(--tabs-indent) * var(--tab-lvl, 0))
   width: calc(var(--tabs-indent) * var(--tab-lvl, 0))
   height: calc(100% + var(--tabs-margin))
   pointer-events: none
@@ -377,27 +378,34 @@
   background-color: var(--guide-active-color)
   border-radius: 1px
 
+.Tab[data-native-group="true"] .tree-guides
+  --tabs-tree-guide-offset: var(--tabs-native-group-gutter)
+
 .Tab .native-group-thread
   position: absolute
-  top: 0
-  left: calc(var(--tabs-inner-gap) + 1px)
+  top: -1px
+  left: 0
   width: var(--tabs-native-group-rail-width)
-  height: 100%
+  height: calc(100% + 2px)
   border-radius: 0
   background-color: var(--native-group-color)
   opacity: .92
   pointer-events: none
   z-index: 1
-  box-shadow: 0 0 0 1px #00000018,
-              0 0 7px var(--native-group-color)
+  box-shadow: -4px 0 8px -6px var(--native-group-color),
+              4px 0 8px -6px var(--native-group-color)
 
 .Tab .native-group-thread[data-start="true"]
+  top: 0
+  height: calc(100% + 1px)
   border-radius: 2px 2px 0 0
 
 .Tab .native-group-thread[data-end="true"]
+  height: calc(100% + 1px)
   border-radius: 0 0 2px 2px
 
 .Tab .native-group-thread[data-start="true"][data-end="true"]
+  height: 100%
   border-radius: 2px
 
 .Tab[data-native-group="true"][data-pin="false"] .fav

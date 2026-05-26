@@ -159,7 +159,7 @@ export function isTabVisibleInNativeGroup(tab?: T.Tab): boolean {
   if (!hasNativeGroup(tab)) return true
   if (!tab) return true
   if (!isNativeGroupCollapsed(tab.groupId)) return true
-  return false
+  return tab.active || tab.reactive.active
 }
 
 export function shouldShowNativeGroupBeforeTab(tab?: T.Tab, prevTab?: T.Tab): boolean {
