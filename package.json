@@ -15,7 +15,7 @@
     "build.html": "node build/html.js",
     "build.copy": "node build/copy.js",
     "build.scripts": "node build/scripts.js",
-    "build.ext": "web-ext build --source-dir ./addon -a dist/ -i __tests__",
+    "build.ext": "web-ext build --source-dir ./addon -a dist/ -i __tests__ --overwrite-dest",
     "build.run": "node build/webext.run.js",
     "build": "node build/all.js",
     "vite": "node build/all.vite.js",

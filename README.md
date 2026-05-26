@@ -266,32 +266,83 @@ Result:
 
 </details>
 
-## Build
+## Build and install locally
 
-> Prerequisites: latest LTS Node.js version
+These steps build the extension on your machine and load it into Firefox as a temporary add-on.
 
-1. Install dependencies: `npm install`
-2. Build all parts of Add-on: `npm run build`
-3. Create Add-on archive in `./dist`: `npm run build.ext`
+### Requirements
 
-After creating the Add-on archive, you can then use the version in Firefox as follows:
+- Firefox 140 or newer
+- Node.js 20 or newer (latest LTS is recommended)
+- npm (included with Node.js)
 
-1. Open Firefox
-2. Go to `about:debugging`
-3. Go to "This Firefox"
-4. At "Temporary Extensions" click on "Load Temporary Add-on..."
-5. Select the `.zip` file in the `dist` directory.
-6. Close the settings tab
-7. Your Firefox now always runs with the development version
-8. For updating: Repeat all steps.
+### Build the extension
+
+From the repository root:
+
+```bash
+npm install
+npm run build
+```
+
+You only need to run `npm install` once after cloning the repository, or again later if `package.json` or `package-lock.json` changes.
+
+The build output is written to the `addon/` directory. This is the folder Firefox should load for local testing.
+
+### Load it in Firefox
+
+1. Open Firefox.
+2. Go to `about:debugging#/runtime/this-firefox`.
+3. Click **Load Temporary Add-on...**.
+4. Select `addon/manifest.json` from this repository.
+5. Sidebery should appear in Firefox's sidebar add-ons.
+
+> [!NOTE]
+> Firefox temporary add-ons are removed when Firefox closes. After restarting Firefox, repeat the "Load it in Firefox" steps.
+
+### Update after changing code
+
+Run the build again:
+
+```bash
+npm run build
+```
+
+You do not need to run `npm install` again for normal code changes.
+
+Then go back to `about:debugging#/runtime/this-firefox` and click **Reload** on the Sidebery temporary extension card.
+
+### Optional: create a zip archive
+
+To package the built extension into `dist/sidebery-<version>.zip`, run:
+
+```bash
+npm run build.ext
+```
+
+This archive is useful for release checks or sharing a build. For normal local Firefox testing, load `addon/manifest.json` instead.
 
 ## Development
 
-> Prerequisites: latest LTS Node.js version
+For active development, run the watch build in one terminal:
 
-Install dependencies: `npm install`  
-Build and watch for changes: `npm run dev`  
-Run browser with Add-on: `npm run dev.run -- <firefox-executable>`
+```bash
+npm run dev
+```
+
+Then either reload the temporary extension from `about:debugging#/runtime/this-firefox`, or start a separate Firefox profile with the extension already loaded:
+
+```bash
+npm run dev.run
+```
+
+To use a specific Firefox-based browser, pass its executable path:
+
+```bash
+npm run dev.run -- /path/to/firefox-executable
+```
+
+Examples include Firefox Developer Edition, Firefox Nightly, Zen, and Floorp.
 
 ## Donate
 
