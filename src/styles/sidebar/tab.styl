@@ -12,6 +12,8 @@
   --tabs-inner-gap: 5px
   --tabs-close-btn-margin: 2px
   --tabs-audio-btn-width: 22px
+  --tabs-native-group-rail-width: 4px
+  --tabs-native-group-gutter: 14px
   --tabs-normal-bg: var(--frame-el-bg)
   --tabs-normal-fg: var(--frame-fg)
   --tabs-activated-bg: var(--active-el-bg)
@@ -378,8 +380,8 @@
 .Tab .native-group-thread
   position: absolute
   top: 0
-  left: calc(var(--tabs-inner-gap) + 2px)
-  width: 4px
+  left: calc(var(--tabs-inner-gap) + 1px)
+  width: var(--tabs-native-group-rail-width)
   height: 100%
   border-radius: 0
   background-color: var(--native-group-color)
@@ -390,18 +392,19 @@
               0 0 7px var(--native-group-color)
 
 .Tab .native-group-thread[data-start="true"]
-  top: calc(var(--tabs-height) / 2)
-  height: calc(50% + var(--tabs-margin))
   border-radius: 2px 2px 0 0
 
 .Tab .native-group-thread[data-end="true"]
-  height: calc(var(--tabs-height) / 2)
   border-radius: 0 0 2px 2px
 
 .Tab .native-group-thread[data-start="true"][data-end="true"]
-  top: 4px
-  height: calc(var(--tabs-height) - 8px)
   border-radius: 2px
+
+.Tab[data-native-group="true"][data-pin="false"] .fav
+  margin-left: calc(var(--tabs-native-group-gutter) + var(--tabs-inner-gap) + 2px)
+
+.Tab[data-native-group="true"][data-pin="false"] .audio
+  left: calc(var(--tabs-native-group-gutter) + 18px + var(--tabs-inner-gap))
 
 #root[data-search="true"] .Tab .tree-guides
   display: none
