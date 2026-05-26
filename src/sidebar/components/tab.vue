@@ -18,7 +18,7 @@
   :data-folded="tab.reactive.folded"
   :data-color="tab.reactive.containerColor"
   :data-colorized="!!tabColor"
-  :data-native-group="!!guide?.nativeGroupColor"
+  :data-native-group="!!guide?.nativeGroupThread"
   :data-unread="tab.reactive.unread"
   :data-edit="tab.reactive.customTitleEdit"
   :title="tab.reactive.tooltip"
@@ -31,6 +31,12 @@
   @mouseleave="onMouseLeave"
   @dblclick.prevent.stop="onDoubleClick")
   .dnd-layer(v-once data-dnd-type="tab" :data-dnd-id="tab.id")
+  .native-group-thread(
+    v-if="guide?.nativeGroupThread"
+    :data-start="guide.nativeGroupThread.start"
+    :data-middle="guide.nativeGroupThread.middle"
+    :data-end="guide.nativeGroupThread.end"
+    :style="{ '--native-group-color': guide.nativeGroupThread.color }")
   .body
     .tree-guides(v-if="!iconOnly && Settings.state.tabsLvlDots && !tab.reactive.customTitleEdit")
       .tree-guide(
@@ -41,9 +47,6 @@
       .tree-guide-connector(
         v-if="tab.reactive.lvl > 0"
         :style="{ '--guide-lvl': tab.reactive.lvl - 1, '--guide-color': guide?.connectorColor || undefined }")
-    .native-group-rail(
-      v-if="guide?.nativeGroupColor"
-      :style="{ '--native-group-color': guide.nativeGroupColor }")
     .color-layer(v-if="tabColor" :style="{ '--tab-color': tabColor }")
     .flash-fx(ref="flashFxEl")
     .unread-mark(v-if="tab.reactive.unread")

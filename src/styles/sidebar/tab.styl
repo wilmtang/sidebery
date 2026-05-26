@@ -144,9 +144,10 @@
   gap: var(--tabs-inner-gap)
   border-radius: var(--tabs-border-radius)
   background-color: var(--tabs-normal-bg)
-  box-shadow: var(--frame-el-shadow)
+  box-shadow: var(--frame-el-shadow),
+              inset 0 0 0 1px var(--native-group-color)
   overflow: hidden
-  border-left: 3px solid var(--native-group-color)
+  border-left: 5px solid var(--native-group-color)
   &:before
     content: ''
     position: absolute
@@ -174,13 +175,13 @@
   width: 100%
   height: 100%
   background-color: var(--native-group-color)
-  opacity: .18
+  opacity: .24
 
 .NativeTabGroup .exp
   position: relative
   width: 16px
   height: 16px
-  margin-left: calc(var(--tabs-inner-gap) + 2px)
+  margin-left: calc(var(--tabs-inner-gap) + 4px)
   flex-shrink: 0
   z-index: 2
   transition: transform var(--d-fast)
@@ -202,22 +203,24 @@
   white-space: nowrap
   flex: 1
   z-index: 2
-  font: var(--tabs-font)
+  font: 700 rem(16) var(--general-font-family)
   color: var(--tabs-normal-fg)
+  text-shadow: 0 1px 1px #00000032
 
 .NativeTabGroup .count
   position: relative
-  min-width: 18px
-  height: 18px
+  min-width: 22px
+  height: 20px
   margin-right: var(--tabs-inner-gap)
-  padding: 0 5px
-  border-radius: 9px
+  padding: 0 7px
+  border-radius: 10px
   z-index: 2
-  font: var(--tabs-count-font)
-  line-height: 18px
+  font: 700 rem(10) var(--general-font-family)
+  line-height: 20px
   text-align: center
   color: var(--tabs-normal-fg)
   background-color: var(--frame-el-overlay-selected-bg)
+  box-shadow: inset 0 0 0 1px var(--native-group-color)
 
 // ---
 // -- Set outline for active colored tabs
@@ -372,22 +375,36 @@
   background-color: var(--guide-active-color)
   border-radius: 1px
 
+.Tab .native-group-thread
+  position: absolute
+  top: 0
+  left: calc(var(--tabs-inner-gap) + 2px)
+  width: 4px
+  height: 100%
+  border-radius: 0
+  background-color: var(--native-group-color)
+  opacity: .92
+  pointer-events: none
+  z-index: 1
+  box-shadow: 0 0 0 1px #00000018,
+              0 0 7px var(--native-group-color)
+
+.Tab .native-group-thread[data-start="true"]
+  top: calc(var(--tabs-height) / 2)
+  height: calc(50% + var(--tabs-margin))
+  border-radius: 2px 2px 0 0
+
+.Tab .native-group-thread[data-end="true"]
+  height: calc(var(--tabs-height) / 2)
+  border-radius: 0 0 2px 2px
+
+.Tab .native-group-thread[data-start="true"][data-end="true"]
+  top: 4px
+  height: calc(var(--tabs-height) - 8px)
+  border-radius: 2px
+
 #root[data-search="true"] .Tab .tree-guides
   display: none
-
-.Tab .native-group-rail
-  position: absolute
-  top: 3px
-  left: 0
-  width: 3px
-  height: calc(100% - 6px)
-  border-radius: 0 2px 2px 0
-  background-color: var(--native-group-color)
-  z-index: 2
-
-.Tab[data-active="true"] .native-group-rail
-  top: 4px
-  height: calc(100% - 8px)
 
 // ---
 // -- Color layer

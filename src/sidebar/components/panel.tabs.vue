@@ -67,10 +67,16 @@ type TreeGuideSlot = {
   color: string
   continues: boolean
 }
+type NativeGroupThread = {
+  color: string
+  start: boolean
+  middle: boolean
+  end: boolean
+}
 export type TabGuideInfo = {
   slots: TreeGuideSlot[]
   connectorColor: string
-  nativeGroupColor: string
+  nativeGroupThread?: NativeGroupThread
 }
 type VisibleItem =
   | { type: 'tab'; id: ID; key: string; guide: TabGuideInfo }
@@ -108,13 +114,6 @@ const visibleItems = computed<VisibleItem[]>(() => {
 function getTabGuide(tab: Tab, visibleTabs: Tab[]): TabGuideInfo {
   const ancestors = getAncestors(tab)
   const parent = ancestors[ancestors.length - 1]
-  const nativeGroup = Tabs.getNativeGroup(tab.groupId)
-  const nativeGroupColor =
-    Settings.state.nativeGroupsShowInSidebar &&
-    Settings.state.nativeGroupsShowColoredRails &&
-    nativeGroup
-      ? D.RGB_COLORS[nativeGroup.color ?? 'toolbar']
-      : ''
 
   return {
     slots: ancestors.map(ancestor => ({
@@ -123,7 +122,29 @@ function getTabGuide(tab: Tab, visibleTabs: Tab[]): TabGuideInfo {
       continues: hasLaterVisibleDescendant(tab, ancestor.id, visibleTabs),
     })),
     connectorColor: parent ? getTreeGuideColor(parent) : '',
-    nativeGroupColor,
+    nativeGroupThread: getNativeGroupThread(tab, visibleTabs),
+  }
+}
+
+function getNativeGroupThread(tab: Tab, visibleTabs: Tab[]): NativeGroupThread | undefined {
+  if (!Settings.state.nativeGroupsShowInSidebar || !Settings.state.nativeGroupsShowColoredRails) {
+    return
+  }
+
+  const nativeGroup = Tabs.getNativeGroup(tab.groupId)
+  if (!nativeGroup) return
+
+  const index = visibleTabs.indexOf(tab)
+  if (index === -1) return
+
+  const start = !visibleTabs.slice(0, index).some(t => t.groupId === tab.groupId)
+  const end = !visibleTabs.slice(index + 1).some(t => t.groupId === tab.groupId)
+
+  return {
+    color: D.RGB_COLORS[nativeGroup.color ?? 'toolbar'],
+    start,
+    middle: !start && !end,
+    end,
   }
 }
 
