@@ -19,6 +19,7 @@ export const EDITING_POPUP_URL = /* @__PURE__ */ browser.runtime.getURL(
 export const RGB_COLORS: Record<browser.ColorName, string> = {
   blue: '#37adff',
   cyan: '#00c7e6',
+  gray: '#8a8a8a',
   grey: '#8a8a8a',
   turquoise: '#00c79a',
   green: '#51cd00',

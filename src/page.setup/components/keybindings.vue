@@ -34,7 +34,9 @@
       KeybindingField.-no-separator(:keybinding="Keybindings.reactive.byName.loop_panels_backwards")
       ToggleField.-no-separator(
         label="settings.kb_switching_panel.ignore_hidden"
+        dbg="loopPanelsIgnoreHidden"
         v-model:value="Settings.state.loopPanelsIgnoreHidden"
+        :default="DEFAULT_SETTINGS.loopPanelsIgnoreHidden"
         @update:value="Settings.saveDebounced(150)")
     KeybindingField(:keybinding="Keybindings.reactive.byName.next_panel")
     KeybindingField(:keybinding="Keybindings.reactive.byName.prev_panel")
@@ -74,7 +76,9 @@
       SelectField(
         label="settings.new_tab_in_panel_pos"
         optLabel="settings.new_tab_in_panel_pos_"
+        dbg="kbNewTabInPanelPos"
         v-model:value="Settings.state.kbNewTabInPanelPos"
+        :default="DEFAULT_SETTINGS.kbNewTabInPanelPos"
         :folded="true"
         :opts="Settings.getOpts('newTabInPanelPos')"
         @update:value="Settings.saveDebounced(150)")
@@ -104,11 +108,15 @@
         KeybindingField(:keybinding="Keybindings.reactive.byName.down")
         ToggleField(
           label="settings.select_active_tab_first"
+          dbg="selectActiveTabFirst"
           v-model:value="Settings.state.selectActiveTabFirst"
+          :default="DEFAULT_SETTINGS.selectActiveTabFirst"
           @update:value="Settings.saveDebounced(150)")
         ToggleField(
           label="settings.select_cyclic"
+          dbg="selectCyclic"
           v-model:value="Settings.state.selectCyclic"
+          :default="DEFAULT_SETTINGS.selectCyclic"
           @update:value="Settings.saveDebounced(150)")
       KeybindingField(:keybinding="Keybindings.reactive.byName.up_shift")
       KeybindingField(:keybinding="Keybindings.reactive.byName.down_shift")
@@ -217,6 +225,7 @@
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue'
 import { translate } from 'src/dict'
+import { DEFAULT_SETTINGS } from 'src/defaults'
 import * as Settings from 'src/services/settings.fg'
 import * as SetupPage from 'src/services/setup-page.fg'
 import * as Keybindings from 'src/services/keybindings.fg'

@@ -29,6 +29,7 @@
     "release-notes": "node build/release-notes.js",
     "release.nightly": "node build/release-nightly.js",
     "test": "vitest run",
+    "test.e2e.firefox": "npm run build && node --test tests/e2e/firefox-native-groups.test.mjs",
     "test.watch": "vitest watch"
   },
   "author": "mbnuqw",
@@ -42,17 +43,19 @@
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-prettier": "5.5.5",
     "eslint-plugin-vue": "10.9.1",
+    "geckodriver": "6.1.0",
     "globals": "17.6.0",
     "jsdom": "29.1.1",
     "prettier": "3.8.3",
     "pug": "3.0.4",
+    "selenium-webdriver": "4.44.0",
     "stylus": "0.64.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.59.4",
     "vite": "8.0.13",
     "vitest": "4.1.6",
     "vue-tsc": "3.3.0",
-    "web-ext": "10.1.0"
+    "web-ext": "10.3.0"
   },
   "dependencies": {
     "vue": "3.5.34"
@@ -72,5 +75,8 @@
   "browserslist": [
     "Firefox >= 140"
   ],
-  "sideEffects": false
+  "sideEffects": false,
+  "overrides": {
+    "shell-quote": "1.8.4"
+  }
 }

@@ -24,12 +24,12 @@
       :preSelected="preSelected"
       @dropdown-blur="onDropdownBlur"
       @update:value="select")
-  .note(v-if="props.note") {{props.note}}
+  .note(v-if="autoNote") {{autoNote}}
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue'
-import { translate } from 'src/dict'
+import { computed, ref } from 'vue'
+import { translate, translateIfExists } from 'src/dict'
 import type { SelectInputComponent } from 'src/types'
 import * as Utils from 'src/utils'
 import SelectInput from './select-input.vue'
@@ -63,6 +63,14 @@ const dropDownOpen = ref(false)
 const preSelected = ref<string | number>(-1)
 const inputComponent = ref<SelectInputComponent | null>(null)
 const rootEl = ref<HTMLElement | null>(null)
+const autoNote = computed(() => {
+  if (props.note) return props.note
+
+  const dbgNote = translateIfExists(props.dbg ? `settings.notes.${props.dbg}` : undefined)
+  if (dbgNote) return dbgNote
+
+  return translateIfExists(`${props.label}_note`)
+})
 
 let rangeIsSelected = false
 

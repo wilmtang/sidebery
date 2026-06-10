@@ -17,11 +17,12 @@
         @update:value="onInput"
         @change="onChange")
       ToggleInput.toggle-input(:value="props.value !== props.off" @update:value="toggle")
+  .note(v-if="autoNote") {{autoNote}}
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue'
-import { translate } from 'src/dict'
+import { computed, ref } from 'vue'
+import { translate, translateIfExists } from 'src/dict'
 import type { TextInputComponent } from 'src/types'
 import TextInput from './text-input.vue'
 import ToggleInput from './toggle-input.vue'
@@ -33,6 +34,7 @@ interface CountFieldProps {
   inactive?: boolean
   off?: number
   min?: number
+  note?: string
   dbg?: string
   default?: number | string
 }
@@ -40,6 +42,14 @@ interface CountFieldProps {
 const emit = defineEmits(['update:value', 'change'])
 const props = withDefaults(defineProps<CountFieldProps>(), { min: 0 })
 const textInputEl = ref<TextInputComponent | null>(null)
+const autoNote = computed(() => {
+  if (props.note) return props.note
+
+  const dbgNote = translateIfExists(props.dbg ? `settings.notes.${props.dbg}` : undefined)
+  if (dbgNote) return dbgNote
+
+  return translateIfExists(`${props.label}_note`)
+})
 
 let rangeIsSelected = false
 

@@ -20,6 +20,7 @@ declare namespace browser {
   type ColorName =
     | 'blue'
     | 'cyan'
+    | 'gray'
     | 'grey'
     | 'turquoise'
     | 'green'
@@ -590,6 +591,7 @@ declare namespace browser {
     type Color =
       | 'blue'
       | 'cyan'
+      | 'gray'
       | 'grey'
       | 'green'
       | 'orange'

@@ -9,6 +9,11 @@ import * as Tabs from 'src/services/tabs.fg'
 
 const FALLBACK_GROUP_ID_NONE = -1
 const groupPageCreationLocks = new Set<ID>()
+const NATIVE_GROUP_COLOR_FALLBACK: browser.ColorName = 'toolbar'
+const NATIVE_GROUP_COLOR_ALIASES: Record<string, browser.ColorName> = {
+  gray: 'grey',
+  grey: 'grey',
+}
 
 let listenersAreSet = false
 
@@ -32,6 +37,22 @@ export function getNativeGroup(groupId?: ID): T.NativeTabGroup | undefined {
 
 export function getNativeGroupTitle(groupId: ID): string {
   return getNativeGroup(groupId)?.title || browser.i18n.getMessage('defaultGroupName') || 'Group'
+}
+
+export function normalizeNativeGroupColor(color?: string | null): browser.ColorName {
+  if (!color) return NATIVE_GROUP_COLOR_FALLBACK
+
+  const alias = NATIVE_GROUP_COLOR_ALIASES[color]
+  if (alias) return alias
+
+  if (Object.hasOwn(D.RGB_COLORS, color)) return color as browser.ColorName
+
+  return NATIVE_GROUP_COLOR_FALLBACK
+}
+
+export function getNativeGroupColorValue(groupOrId?: ID | T.NativeTabGroup): string {
+  const group = typeof groupOrId === 'object' ? groupOrId : getNativeGroup(groupOrId)
+  return D.RGB_COLORS[normalizeNativeGroupColor(group?.color)]
 }
 
 function normalizeGroup(group: browser.tabGroups.TabGroup): T.NativeTabGroup {

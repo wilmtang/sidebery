@@ -26,6 +26,9 @@ export const setupPageTranslations: Translations = {
     zh_TW: '圖示',
     ja: 'アイコン',
   },
+  'container.icon_label_note': {
+    en: 'Icon shown for this container in Sidebery controls and badges.',
+  },
   'container.color_label': {
     en: 'Color',
     de: 'Farbe',
@@ -36,6 +39,9 @@ export const setupPageTranslations: Translations = {
     zh_CN: '颜色',
     zh_TW: '顏色',
     ja: '色',
+  },
+  'container.color_label_note': {
+    en: 'Color used for this container in Sidebery controls and badges.',
   },
   'container.reopen_rules_label': {
     en: 'Include / Exclude tab by URL',
@@ -66,21 +72,36 @@ export const setupPageTranslations: Translations = {
     zh: '代理',
     ja: 'プロキシ',
   },
+  'container.proxy_label_note': {
+    en: 'Routes requests for tabs in this container through the selected proxy type.',
+  },
   'container.proxy_host_placeholder': {
     en: '---',
     ru: 'хост',
+  },
+  'container.proxy_host_note': {
+    en: 'Proxy server host name or IP address.',
   },
   'container.proxy_port_placeholder': {
     en: '---',
     ru: 'порт',
   },
+  'container.proxy_port_note': {
+    en: 'Proxy server port.',
+  },
   'container.proxy_username_placeholder': {
     en: '---',
     ru: 'пользователь',
   },
+  'container.proxy_username_note': {
+    en: 'Optional proxy authentication username.',
+  },
   'container.proxy_password_placeholder': {
     en: '---',
     ru: 'пароль',
+  },
+  'container.proxy_password_note': {
+    en: 'Optional proxy authentication password.',
   },
   'container.proxy_dns_label': {
     en: 'proxy DNS',
@@ -92,6 +113,9 @@ export const setupPageTranslations: Translations = {
     zh_CN: 'DNS代理',
     zh_TW: '代理DNS',
     ja: 'プロキシDNS',
+  },
+  'container.proxy_dns_label_note': {
+    en: 'Sends DNS lookups through the SOCKS proxy instead of resolving names locally.',
   },
   'container.proxy_http': {
     en: 'HTTP',
@@ -115,6 +139,9 @@ export const setupPageTranslations: Translations = {
     zh_CN: '无',
     zh_TW: '無',
     ja: 'なし',
+  },
+  'container.user_agent_note': {
+    en: 'Overrides the User-Agent header for tabs opened in this container.',
   },
   'container.rules_include': {
     en: 'Include URLs',
@@ -2084,8 +2111,14 @@ You can also set prefixes for each command type for faster navigation. Starting 
     zh: '列表',
     ja: 'リスト',
   },
+  'settings.group_layout_note': {
+    en: 'Controls the layout inside Sidebery group pages. This does not change native Firefox tab group headers or member tabs in the sidebar.',
+  },
   'settings.native_groups_show_in_sidebar': {
     en: 'Show native Firefox tab groups in the sidebar',
+  },
+  'settings.native_groups_show_in_sidebar_note': {
+    en: 'Adds a Firefox tab group header to the tabs panel. When a Firefox group is collapsed, Sidebery hides inactive member tabs and keeps the active member visible, matching Firefox and Tree Style Tab behavior.',
   },
   'settings.native_groups_title': {
     en: 'Native Firefox tab groups',
@@ -2093,8 +2126,721 @@ You can also set prefixes for each command type for faster navigation. Starting 
   'settings.native_groups_show_colored_rails': {
     en: 'Show colored group rails in the sidebar',
   },
+  'settings.native_groups_show_colored_rails_note': {
+    en: 'Draws a group-colored rail beside visible member tabs. Existing Sidebery visibility settings, such as folded tabs, hidden inactive panels, unloaded tabs, and search filtering, still decide which member tabs are visible.',
+  },
   'settings.native_groups_create_sidebery_page': {
     en: 'Create a Sidebery group page when creating a native Firefox tab group',
+  },
+  'settings.native_groups_create_sidebery_page_note': {
+    en: "Creates Sidebery's internal group page as the first tab in a new Firefox tab group. Leave this off if you only want native Firefox groups.",
+  },
+
+  // - Automatic field notes
+  'settings.notes.nativeScrollbars': {
+    en: "Uses Firefox's native scrollbars inside Sidebery panels instead of Sidebery-styled overlay scrollbars.",
+  },
+  'settings.notes.nativeScrollbarsThin': {
+    en: 'Makes native scrollbars use the compact Firefox scrollbar width.',
+  },
+  'settings.notes.nativeScrollbarsLeft': {
+    en: 'Moves native scrollbars to the left edge of scrollable Sidebery panels.',
+  },
+  'settings.notes.selWinScreenshots': {
+    en: 'Lets Sidebery capture page screenshots for visual window/tab selection. This may require page access permission.',
+  },
+  'settings.notes.updateSidebarTitle': {
+    en: 'Updates the Firefox sidebar title to match the active Sidebery panel.',
+  },
+  'settings.notes.markWindow': {
+    en: 'Adds a text prefix to the browser window title while this Sidebery sidebar is connected.',
+  },
+  'settings.notes.copyTreeIndent': {
+    en: 'Text inserted before copied child tabs or bookmarks so copied trees keep readable nesting.',
+  },
+  'settings.notes.copyMultiBullet': {
+    en: 'Text inserted before each copied item when copying more than one tab or bookmark.',
+  },
+  'settings.notes.ctxMenuNative': {
+    en: "Uses Firefox's native context menu instead of Sidebery's custom rendered menu. Some custom layout features are unavailable in native menus.",
+  },
+  'settings.notes.ctxMenuRenderInact': {
+    en: 'Shows disabled context-menu commands instead of hiding commands that cannot run for the current selection.',
+  },
+  'settings.notes.ctxMenuRenderIcons': {
+    en: "Shows icons in Sidebery's custom context menus.",
+  },
+  'settings.notes.containersSortByName': {
+    en: 'Sorts container identities alphabetically in Sidebery lists instead of Firefox/container creation order.',
+  },
+  'settings.notes.dndTabAct': {
+    en: 'Activates a tab when you drag something over it and hold for the configured delay.',
+  },
+  'settings.notes.dndTabActDelay': {
+    en: 'How long the pointer must stay over a tab before drag-over activation runs.',
+  },
+  'settings.notes.dndTabActMod': {
+    en: 'Requires this modifier key while dragging before drag-over tab activation can run.',
+  },
+  'settings.notes.dndExp': {
+    en: 'Controls whether folded branches expand while dragging tabs or bookmarks over them.',
+  },
+  'settings.notes.dndExpDelay': {
+    en: 'How long the pointer must stay over a folded branch before it expands during drag and drop.',
+  },
+  'settings.notes.dndExpMod': {
+    en: 'Requires this modifier key while dragging before folded branches expand.',
+  },
+  'settings.notes.dndActTabFromLink': {
+    en: 'When a link is dragged over a tab, activates that tab so the drop can target its context.',
+  },
+  'settings.notes.dndActSearchTab': {
+    en: 'Allows drag-over activation for tabs shown in search results.',
+  },
+  'settings.notes.dndTabToPanelPos': {
+    en: 'Where a tab is placed when it is dragged onto another tabs panel instead of onto a specific tab.',
+  },
+  'settings.notes.loadBookmarksOnDemand': {
+    en: 'Loads bookmark folders only when needed, which improves startup time for large bookmark libraries.',
+  },
+  'settings.notes.warnOnMultiBookmarkDelete': {
+    en: 'Controls when Sidebery asks before deleting multiple bookmarks or bookmark folders.',
+  },
+  'settings.notes.askNewBookmarkPlace': {
+    en: 'Asks where to save newly created bookmarks instead of immediately using the default destination.',
+  },
+  'settings.notes.bookmarksRmUndoNote': {
+    en: 'Shows an undo notification after bookmark deletion when Sidebery can restore the removed items.',
+  },
+  'settings.notes.autoCloseBookmarks': {
+    en: 'Closes the bookmarks subpanel automatically after opening a bookmark.',
+  },
+  'settings.notes.autoRemoveOther': {
+    en: 'Removes older duplicate bookmarks when saving a tab that was already bookmarked elsewhere.',
+  },
+  'settings.notes.showBookmarkLen': {
+    en: 'Shows child item counts for bookmark folders.',
+  },
+  'settings.notes.highlightOpenBookmarks': {
+    en: 'Marks bookmarks whose URLs are currently open in tabs.',
+  },
+  'settings.notes.activateOpenBookmarkTab': {
+    en: 'When opening an already-open bookmark, switches to the existing tab instead of opening another copy.',
+  },
+  'settings.notes.pinOpenedBookmarksFolder': {
+    en: 'Keeps the currently opened bookmark folder visible while browsing bookmark panels.',
+  },
+  'settings.notes.oldBookmarksAfterSave': {
+    en: 'What to do with older matching bookmarks after saving the same tab again.',
+  },
+  'settings.notes.loadHistoryOnDemand': {
+    en: 'Loads history entries only when the history panel needs them, reducing startup work.',
+  },
+  'settings.notes.navBarLayout': {
+    en: 'Controls whether Sidebery panel buttons are horizontal, vertical, or hidden.',
+  },
+  'settings.notes.navBarInline': {
+    en: 'Keeps horizontal navigation buttons in one row when space allows.',
+  },
+  'settings.notes.navBarSide': {
+    en: 'Which side of the sidebar gets the vertical navigation bar.',
+  },
+  'settings.notes.navBtnCount': {
+    en: 'Shows tab or bookmark counts on panel navigation buttons.',
+  },
+  'settings.notes.hideEmptyPanels': {
+    en: 'Hides tabs panels with no visible tabs from navigation and panel switching.',
+  },
+  'settings.notes.hideDiscardedTabPanels': {
+    en: 'Hides tabs panels whose visible tabs are all unloaded/discarded.',
+  },
+  'settings.notes.navSwitchPanelsDelay': {
+    en: 'Delay used when wheel scrolling or commands switch between panels.',
+  },
+  'settings.notes.subPanelRecentlyClosedBar': {
+    en: 'Shows the recently closed tabs subpanel button in the bottom bar.',
+  },
+  'settings.notes.subPanelBookmarks': {
+    en: 'Shows the bookmarks subpanel button in the bottom bar.',
+  },
+  'settings.notes.subPanelHistory': {
+    en: 'Shows the history subpanel button in the bottom bar.',
+  },
+  'settings.notes.subPanelSync': {
+    en: 'Shows the sync subpanel button in the bottom bar.',
+  },
+  'settings.notes.omniReopenInCtr': {
+    en: 'Adds an address-bar command for reopening the current tab in a container.',
+  },
+  'settings.notes.omniReopenInCtrPrefix': {
+    en: 'Optional command prefix for reopening a tab in a container from the address bar.',
+  },
+  'settings.notes.omniSwitchToPanel': {
+    en: 'Adds an address-bar command for switching to a Sidebery panel.',
+  },
+  'settings.notes.omniSwitchToPanelPrefix': {
+    en: 'Optional command prefix for switching to a Sidebery panel from the address bar.',
+  },
+  'settings.notes.omniMoveToPanel': {
+    en: 'Adds an address-bar command for moving the current tab to a Sidebery panel.',
+  },
+  'settings.notes.omniMoveToPanelPrefix': {
+    en: 'Optional command prefix for moving the current tab to a panel from the address bar.',
+  },
+  'settings.notes.omniMoveToGroup': {
+    en: 'Adds an address-bar command for moving the current tab to a Sidebery group page.',
+  },
+  'settings.notes.omniMoveToGroupPrefix': {
+    en: 'Optional command prefix for moving the current tab to a group from the address bar.',
+  },
+  'settings.notes.searchBarMode': {
+    en: 'Controls whether the search box is always visible, opens only when needed, or is disabled.',
+  },
+  'settings.notes.searchPanelSwitch': {
+    en: 'Controls whether search can switch panels while looking for matching tabs, bookmarks, or history.',
+  },
+  'settings.notes.searchTabSwitch': {
+    en: 'Activates a tab directly when search narrows results enough to pick it.',
+  },
+  'settings.notes.searchMenuTrig': {
+    en: 'Allows search input shortcuts to trigger menu/search actions from the sidebar.',
+  },
+  'settings.notes.searchBookmarksShortcut': {
+    en: 'Text prefix that starts bookmark search directly from the search box.',
+  },
+  'settings.notes.searchHistoryShortcut': {
+    en: 'Text prefix that starts history search directly from the search box.',
+  },
+  'settings.notes.fontSize': {
+    en: "Changes Sidebery's base UI font size.",
+  },
+  'settings.notes.fontFamily': {
+    en: 'Optional custom font-family value for the Sidebery UI. Leave empty to use the system font.',
+  },
+  'settings.notes.animations': {
+    en: 'Enables or disables Sidebery UI animations and transitions.',
+  },
+  'settings.notes.animationSpeed': {
+    en: 'Controls how quickly enabled Sidebery animations run.',
+  },
+  'settings.notes.theme': {
+    en: "Switches Sidebery's built-in visual theme.",
+  },
+  'settings.notes.density': {
+    en: 'Adjusts spacing, row heights, and compactness across Sidebery panels.',
+  },
+  'settings.notes.colorScheme': {
+    en: 'Chooses whether Sidebery follows dark, light, system, or Firefox theme colors.',
+  },
+  'settings.notes.snapNotify': {
+    en: 'Shows a notification when Sidebery creates a snapshot.',
+  },
+  'settings.notes.snapExcludePrivate': {
+    en: 'Skips private windows when saving automatic or manual snapshots.',
+  },
+  'settings.notes.snapInterval': {
+    en: 'How often Sidebery automatically saves snapshots. Set to zero to disable scheduled snapshots.',
+  },
+  'settings.notes.snapAutoExport': {
+    en: 'Automatically exports new snapshots to a file after they are created.',
+  },
+  'settings.notes.snapAutoExportType': {
+    en: 'Chooses JSON, Markdown, or both formats for automatic snapshot exports.',
+  },
+  'settings.notes.syncName': {
+    en: 'Human-readable name for this browser profile in Sidebery sync entries.',
+  },
+  'settings.notes.syncUseGoogleDriveApiClientId': {
+    en: 'Google OAuth client ID used when you provide your own Google Drive API project.',
+  },
+  'settings.notes.syncSaveSettings': {
+    en: 'Includes Sidebery settings in sync data.',
+  },
+  'settings.notes.syncSaveCtxMenu': {
+    en: 'Includes custom context-menu configuration in sync data.',
+  },
+  'settings.notes.syncSaveStyles': {
+    en: 'Includes custom CSS/style data in sync data.',
+  },
+  'settings.notes.syncSaveKeybindings': {
+    en: 'Includes Sidebery keybinding configuration in sync data.',
+  },
+  'settings.notes.hScrollAction': {
+    en: 'What horizontal wheel/trackpad scrolling does inside the sidebar.',
+  },
+  'settings.notes.onePanelSwitchPerScroll': {
+    en: 'Prevents one wheel gesture from switching through multiple panels at once.',
+  },
+  'settings.notes.scrollThroughTabsGlobPinIsolate': {
+    en: 'Keeps global pinned tabs out of scroll-through-tab navigation when possible.',
+  },
+  'settings.notes.scrollThroughVisibleTabs': {
+    en: 'When tree tabs are enabled, scroll-through-tab navigation skips tabs hidden by folding or filtering.',
+  },
+  'settings.notes.scrollThroughTabsSkipDiscarded': {
+    en: 'Skips unloaded/discarded tabs when wheel scrolling through tabs.',
+  },
+  'settings.notes.scrollThroughTabsExceptOverflow': {
+    en: 'Lets normal panel scrolling win when the tab list itself has overflow to scroll.',
+  },
+  'settings.notes.scrollThroughTabsCyclic': {
+    en: 'Wraps from the last tab to the first tab, and from the first tab to the last, while scrolling through tabs.',
+  },
+  'settings.notes.scrollThroughTabsPreselAct': {
+    en: 'When preselect scrolling is enabled, selects the active tab first before moving to nearby tabs.',
+  },
+  'settings.notes.longClickDelay': {
+    en: 'How long a pointer press must last before Sidebery treats it as a long click.',
+  },
+  'settings.notes.wheelThreshold': {
+    en: 'Requires wheel movement to pass a threshold before Sidebery handles wheel actions.',
+  },
+  'settings.notes.wheelThresholdY': {
+    en: 'Vertical wheel movement required before a vertical wheel action is accepted.',
+  },
+  'settings.notes.wheelAccumulationY': {
+    en: 'Accumulates small vertical wheel deltas until they reach the threshold.',
+  },
+  'settings.notes.wheelThresholdX': {
+    en: 'Horizontal wheel movement required before a horizontal wheel action is accepted.',
+  },
+  'settings.notes.wheelAccumulationX': {
+    en: 'Accumulates small horizontal wheel deltas until they reach the threshold.',
+  },
+  'settings.notes.navActTabsPanelLeftClickAction': {
+    en: 'What left-clicking the active tabs-panel navigation button does.',
+  },
+  'settings.notes.navActTabsPanelLeftClickTabPos': {
+    en: 'Where to open a new tab when the active tabs-panel navigation button is configured to create tabs.',
+  },
+  'settings.notes.navActBookmarksPanelLeftClickAction': {
+    en: 'What left-clicking the active bookmarks-panel navigation button does.',
+  },
+  'settings.notes.navTabsPanelMidClickAction': {
+    en: 'What middle-clicking a tabs-panel navigation button does.',
+  },
+  'settings.notes.navBookmarksPanelMidClickAction': {
+    en: 'What middle-clicking a bookmarks-panel navigation button does.',
+  },
+  'settings.notes.navSwitchPanelsWheel': {
+    en: 'Allows the mouse wheel over the navigation bar to switch panels.',
+  },
+  'settings.notes.tabDoubleClick': {
+    en: 'Action to run when double-clicking a tab row.',
+  },
+  'settings.notes.tabsSecondClickActPrev': {
+    en: 'Clicking the active tab again switches to the previously active tab.',
+  },
+  'settings.notes.tabsSecondClickActPrevPanelOnly': {
+    en: 'Limits second-click previous-tab switching to the current panel.',
+  },
+  'settings.notes.tabsSecondClickActPrevNoUnload': {
+    en: 'Skips unloaded/discarded tabs when second-click switches to the previous active tab.',
+  },
+  'settings.notes.activateOnMouseUp': {
+    en: 'Activates tabs on mouseup instead of mousedown, which makes drag and selection gestures easier to cancel.',
+  },
+  'settings.notes.tabCloseOnMouseUp': {
+    en: 'Runs tab-close button actions on mouseup instead of mousedown.',
+  },
+  'settings.notes.shiftSelAct': {
+    en: 'Includes the active tab when Shift-selecting a tab range.',
+  },
+  'settings.notes.ctrlSelAct': {
+    en: 'Includes the active tab when Ctrl/Cmd toggling tab selection.',
+  },
+  'settings.notes.tabLongLeftClick': {
+    en: 'Action to run after a long left-click on a tab.',
+  },
+  'settings.notes.tabLongRightClick': {
+    en: 'Action to run after a long right-click on a tab.',
+  },
+  'settings.notes.tabMiddleClick': {
+    en: 'Action to run when middle-clicking a normal tab.',
+  },
+  'settings.notes.tabMiddleClickCtrl': {
+    en: 'Action to run when middle-clicking a tab while holding Ctrl/Cmd.',
+  },
+  'settings.notes.tabMiddleClickShift': {
+    en: 'Action to run when middle-clicking a tab while holding Shift.',
+  },
+  'settings.notes.tabPinnedMiddleClick': {
+    en: 'Action to run when middle-clicking a pinned tab.',
+  },
+  'settings.notes.tabCloseMiddleClick': {
+    en: 'Action to run when middle-clicking a tab close button.',
+  },
+  'settings.notes.tabsPanelLeftClickAction': {
+    en: 'What clicking empty space in a tabs panel does.',
+  },
+  'settings.notes.tabsPanelLeftClickTabPos': {
+    en: 'Where to open a new tab when empty-space left click is configured to create tabs.',
+  },
+  'settings.notes.tabsPanelDoubleClickAction': {
+    en: 'What double-clicking empty space in a tabs panel does.',
+  },
+  'settings.notes.tabsPanelDoubleClickTabPos': {
+    en: 'Where to open a new tab when empty-space double click is configured to create tabs.',
+  },
+  'settings.notes.tabsPanelRightClickAction': {
+    en: 'What right-clicking empty space in a tabs panel does.',
+  },
+  'settings.notes.tabsPanelMiddleClickAction': {
+    en: 'What middle-clicking empty space in a tabs panel does.',
+  },
+  'settings.notes.tabsPanelMiddleClickTabPos': {
+    en: 'Where to open a new tab when empty-space middle click is configured to create tabs.',
+  },
+  'settings.notes.newTabMiddleClickAction': {
+    en: 'What middle-clicking a Sidebery new-tab button does.',
+  },
+  'settings.notes.bookmarksLeftClickAction': {
+    en: 'What left-clicking a bookmark does.',
+  },
+  'settings.notes.bookmarksLeftClickActivate': {
+    en: 'Activates a newly opened bookmark tab immediately.',
+  },
+  'settings.notes.bookmarksLeftClickPos': {
+    en: 'Where to place a tab opened from a bookmark left click.',
+  },
+  'settings.notes.bookmarksMidClickAction': {
+    en: 'What middle-clicking a bookmark does.',
+  },
+  'settings.notes.bookmarksMidClickActivate': {
+    en: 'Activates a newly opened bookmark tab from middle click immediately.',
+  },
+  'settings.notes.bookmarksMidClickRemove': {
+    en: 'Removes the bookmark after opening it with middle click.',
+  },
+  'settings.notes.bookmarksMidClickPos': {
+    en: 'Where to place a tab opened from a bookmark middle click.',
+  },
+  'settings.notes.historyLeftClickAction': {
+    en: 'What left-clicking a history entry does.',
+  },
+  'settings.notes.historyLeftClickActivate': {
+    en: 'Activates a newly opened history tab immediately.',
+  },
+  'settings.notes.historyLeftClickPos': {
+    en: 'Where to place a tab opened from a history left click.',
+  },
+  'settings.notes.historyMidClickAction': {
+    en: 'What middle-clicking a history entry does.',
+  },
+  'settings.notes.historyMidClickActivate': {
+    en: 'Activates a newly opened history tab from middle click immediately.',
+  },
+  'settings.notes.historyMidClickPos': {
+    en: 'Where to place a tab opened from a history middle click.',
+  },
+  'settings.notes.warnOnMultiTabClose': {
+    en: 'Controls when Sidebery asks before closing multiple tabs.',
+  },
+  'settings.notes.tabsRmUndoNote': {
+    en: 'Shows an undo notification after closing tabs when Firefox session data can restore them.',
+  },
+  'settings.notes.activateLastTabOnPanelSwitching': {
+    en: 'Remembers the last active tab per panel and reactivates it when switching panels.',
+  },
+  'settings.notes.activateLastTabOnPanelSwitchingLoadedOnly': {
+    en: 'When restoring the last active tab for a panel, skips unloaded/discarded tabs.',
+  },
+  'settings.notes.switchPanelAfterSwitchingTab': {
+    en: 'Controls when Sidebery switches to the panel that contains a newly activated tab.',
+  },
+  'settings.notes.scrollPanelAfterSwitchingTab': {
+    en: 'Controls when Sidebery scrolls the active panel to reveal a newly activated tab.',
+  },
+  'settings.notes.tabRmBtn': {
+    en: 'Controls when the close button is visible on tab rows.',
+  },
+  'settings.notes.activateAfterClosing': {
+    en: 'Which nearby or previously active tab Sidebery tries to activate after closing the current tab.',
+  },
+  'settings.notes.activateAfterClosingStayInPanel': {
+    en: 'Keeps after-close activation inside the current Sidebery panel when possible.',
+  },
+  'settings.notes.activateAfterClosingGlobal': {
+    en: 'Allows after-close activation to look outside the current panel.',
+  },
+  'settings.notes.activateAfterClosingNoFolded': {
+    en: 'Skips folded or hidden tree tabs when choosing the next tab after close.',
+  },
+  'settings.notes.activateAfterClosingNoDiscarded': {
+    en: 'Skips unloaded/discarded tabs when choosing the next tab after close.',
+  },
+  'settings.notes.tabsUnreadMark': {
+    en: 'Marks tabs as unread when their title changes while they are inactive.',
+  },
+  'settings.notes.tabsUpdateMark': {
+    en: 'Controls which tabs receive update markers when their content changes in the background.',
+  },
+  'settings.notes.tabsUpdateMarkFirst': {
+    en: 'Marks only the first update until a tab is visited again.',
+  },
+  'settings.notes.tabsReloadLimit': {
+    en: 'Maximum number of tabs Sidebery reloads at once from bulk reload actions.',
+  },
+  'settings.notes.tabsReloadLimitNotif': {
+    en: 'Shows progress/stop notification while bulk reloading many tabs.',
+  },
+  'settings.notes.tabsPanelSwitchActMove': {
+    en: 'Moves the active tab to the selected panel when switching panels under hidden-inactive-panel mode.',
+  },
+  'settings.notes.tabsPanelSwitchActMoveAuto': {
+    en: 'Automatically moves the active tab to keep hidden-inactive-panel mode consistent.',
+  },
+  'settings.notes.tabsUrlInTooltip': {
+    en: 'Controls how much of a tab URL appears in tab tooltips.',
+  },
+  'settings.notes.tabsContainerInTooltip': {
+    en: 'Adds the tab container name to tab tooltips.',
+  },
+  'settings.notes.showNewTabBtns': {
+    en: 'Shows Sidebery new-tab buttons inside tabs panels.',
+  },
+  'settings.notes.newTabBarPosition': {
+    en: 'Places the new-tab button row after the tab list or pinned to the bottom of the panel.',
+  },
+  'settings.notes.tabSwitchDelay': {
+    en: 'Delay before activating a tab through Sidebery-driven tab switching.',
+  },
+  'settings.notes.moveNewTabPin': {
+    en: 'Where new pinned tabs are placed among other pinned tabs.',
+  },
+  'settings.notes.pinnedAutoGroup': {
+    en: 'Automatically keeps pinned tabs grouped in the global pinned area when possible.',
+  },
+  'settings.notes.moveNewTabParent': {
+    en: 'Where a new tab opens when the active tab is a parent in the tree.',
+  },
+  'settings.notes.moveNewTabParentIndent': {
+    en: 'Indents a new tab under its opener when parent-based placement uses the default behavior.',
+  },
+  'settings.notes.moveNewTabParentActPanel': {
+    en: 'Applies parent-based new-tab placement only inside the active panel.',
+  },
+  'settings.notes.moveNewTabButton': {
+    en: 'Where tabs created by Sidebery new-tab buttons are placed.',
+  },
+  'settings.notes.moveNewTabButtonActivePin': {
+    en: 'Where new-tab-button tabs are placed when the active tab is pinned.',
+  },
+  'settings.notes.moveNewTab': {
+    en: 'Default placement for new tabs opened from Firefox or Sidebery actions.',
+  },
+  'settings.notes.moveNewTabActivePin': {
+    en: 'Where new tabs are placed when the active tab is pinned.',
+  },
+  'settings.notes.autoScrollToNewTab': {
+    en: 'Scrolls the tabs panel to reveal a newly opened tab.',
+  },
+  'settings.notes.pinnedTabsPosition': {
+    en: 'Where pinned tabs are displayed: inside each panel, above tabs, or on a side rail.',
+  },
+  'settings.notes.pinnedTabsList': {
+    en: 'Shows pinned tabs as a list instead of compact pinned buttons when their position supports it.',
+  },
+  'settings.notes.pinnedNoUnload': {
+    en: 'Prevents pinned tabs from being unloaded by Sidebery unload actions.',
+  },
+  'settings.notes.pinnedNoUnloadExplicit': {
+    en: 'Also blocks explicit unload/discard commands for pinned tabs, not only automatic unload actions.',
+  },
+  'settings.notes.tabsTree': {
+    en: 'Enables Sidebery tree structure so tabs can be nested under parent tabs.',
+  },
+  'settings.notes.tabsTreeLimit': {
+    en: 'Maximum nesting depth for the tabs tree. Deeper children are flattened to the limit.',
+  },
+  'settings.notes.autoFoldTabs': {
+    en: 'Automatically folds inactive tree branches as you switch tabs.',
+  },
+  'settings.notes.autoFoldTabsExcept': {
+    en: 'Keeps this many ancestor levels unfolded when auto-folding branches.',
+  },
+  'settings.notes.autoExpandTabs': {
+    en: 'Automatically expands a folded branch when one of its tabs becomes active.',
+  },
+  'settings.notes.autoExpandTabsOnNew': {
+    en: 'Expands a parent branch when a new child tab is opened inside it.',
+  },
+  'settings.notes.rmChildTabs': {
+    en: 'What Sidebery does with child tabs when closing a parent tab.',
+  },
+  'settings.notes.tabsLvlDots': {
+    en: 'Shows indentation dots/markers for nested tree levels.',
+  },
+  'settings.notes.discardFolded': {
+    en: 'Automatically unloads tabs hidden inside folded branches.',
+  },
+  'settings.notes.discardFoldedDelay': {
+    en: 'How long folded tabs wait before Sidebery unloads them automatically.',
+  },
+  'settings.notes.tabsTreeBookmarks': {
+    en: 'Preserves tree structure when bookmarking tabs or restoring tabs from bookmarks.',
+  },
+  'settings.notes.treeRmOutdent': {
+    en: 'How children are reattached when a parent tab is removed from the tree.',
+  },
+  'settings.notes.autoGroupOnClose': {
+    en: 'Creates or restores a group page when closing a parent branch would otherwise leave child tabs orphaned.',
+  },
+  'settings.notes.autoGroupOnClose0Lvl': {
+    en: 'Allows auto group-on-close behavior for top-level tabs.',
+  },
+  'settings.notes.autoGroupOnCloseMouseOnly': {
+    en: 'Runs auto group-on-close only for mouse close actions.',
+  },
+  'settings.notes.ignoreFoldedParent': {
+    en: 'Treats folded parent tabs as unavailable in some activation and navigation choices.',
+  },
+  'settings.notes.showNewGroupConf': {
+    en: 'Shows the group configuration popup when creating a Sidebery group page.',
+  },
+  'settings.notes.sortGroupsFirst': {
+    en: 'Keeps Sidebery group pages before regular tabs when sorting tabs.',
+  },
+  'settings.notes.colorizeTabs': {
+    en: 'Applies automatic colors to tabs based on the selected source.',
+  },
+  'settings.notes.colorizeTabsSrc': {
+    en: 'Chooses whether tab auto-colors come from the tab domain or container.',
+  },
+  'settings.notes.colorizeTabsBranches': {
+    en: 'Applies automatic colors to whole tree branches.',
+  },
+  'settings.notes.colorizeTabsBranchesSrc': {
+    en: 'Chooses whether branch auto-colors come from URL or domain.',
+  },
+  'settings.notes.inheritCustomColor': {
+    en: 'Lets child tabs inherit a parent tab custom color when they do not have their own.',
+  },
+  'settings.notes.previewTabs': {
+    en: 'Shows tab previews when hovering tabs. Page previews may require page access permission.',
+  },
+  'settings.notes.previewTabsMode': {
+    en: 'Chooses inline previews inside the sidebar or page screenshots/previews near the tab.',
+  },
+  'settings.notes.previewTabsPageModeFallback': {
+    en: 'Fallback preview mode when a page screenshot cannot be captured.',
+  },
+  'settings.notes.previewTabsDelay': {
+    en: 'How long to hover before a tab preview appears.',
+  },
+  'settings.notes.previewTabsInlineHeight': {
+    en: 'Height of inline previews shown inside the sidebar.',
+  },
+  'settings.notes.previewTabsPopupWidth': {
+    en: 'Width of popup/page previews.',
+  },
+  'settings.notes.previewTabsTitle': {
+    en: 'Number of title lines shown in tab previews.',
+  },
+  'settings.notes.previewTabsUrl': {
+    en: 'Number of URL lines shown in tab previews.',
+  },
+  'settings.notes.previewTabsSide': {
+    en: 'Which side of the sidebar popup previews prefer.',
+  },
+  'settings.notes.previewTabsFollowMouse': {
+    en: 'Moves popup previews with the pointer while hovering.',
+  },
+  'settings.notes.previewTabsInPageOffsetY': {
+    en: 'Vertical offset for page-level previews.',
+  },
+  'settings.notes.previewTabsInPageOffsetX': {
+    en: 'Horizontal offset for page-level previews.',
+  },
+  'settings.notes.previewTabsCropRight': {
+    en: 'Crops the right side of page screenshots in tab previews.',
+  },
+  'settings.notes.hideInact': {
+    en: 'Uses Firefox tab hiding so only tabs from the active Sidebery panel stay visible in Firefox.',
+  },
+  'settings.notes.hideFoldedTabs': {
+    en: 'Uses Firefox tab hiding for tabs inside folded tree branches. Native tab group visibility is applied after this setting.',
+  },
+  'settings.notes.hideFoldedParent': {
+    en: 'Controls whether folded parent tabs are hidden together with their folded descendants.',
+  },
+  'settings.notes.hideUnloadedTabs': {
+    en: 'Uses Firefox tab hiding for unloaded/discarded tabs.',
+  },
+  'settings.kb_switching_panel.ignore_hidden_note': {
+    en: 'Skips panels hidden by empty-panel or discarded-panel visibility settings while looping panels.',
+  },
+  'settings.new_tab_in_panel_pos_note': {
+    en: 'Default placement used by this shortcut or mouse action when it opens a new tab in a panel.',
+  },
+  'settings.select_active_tab_first_note': {
+    en: 'When keyboard selection starts, selects the active tab before moving the selection range.',
+  },
+  'settings.select_cyclic_note': {
+    en: 'Lets keyboard selection wrap from the end of a list back to the beginning.',
+  },
+  'settings.backup_settings_note': {
+    en: 'Includes global Sidebery settings in the backup/import operation.',
+  },
+  'settings.backup_menu_note': {
+    en: 'Includes custom context-menu layout and enabled commands.',
+  },
+  'settings.backup_containers_note': {
+    en: 'Includes Sidebery container metadata and container-specific rules.',
+  },
+  'settings.backup_nav_note': {
+    en: 'Includes panel/sidebar navigation configuration.',
+  },
+  'settings.backup_styles_note': {
+    en: 'Includes custom CSS and style settings.',
+  },
+  'settings.backup_snapshots_note': {
+    en: 'Includes saved Sidebery snapshots.',
+  },
+  'settings.backup_favicons_note': {
+    en: 'Includes Sidebery cached favicons.',
+  },
+  'settings.backup_kb_note': {
+    en: 'Includes Sidebery keyboard shortcut configuration.',
+  },
+  'panel.icon_label_note': {
+    en: 'Icon used for this panel in the navigation bar.',
+  },
+  'panel.color_label_note': {
+    en: 'Accent color used for this panel in navigation and panel UI.',
+  },
+  'panel.custom_icon_colorize_note': {
+    en: 'Tints a custom icon with the panel color when the custom icon can be colorized.',
+  },
+  'panel.lock_panel_label_note': {
+    en: 'Prevents this panel from being removed or replaced accidentally.',
+  },
+  'panel.temp_mode_label_note': {
+    en: 'Makes this panel temporary so it can be reused or replaced by transient navigation.',
+  },
+  'panel.skip_on_switching_note': {
+    en: 'Skips this panel when cycling panels with wheel actions or keyboard shortcuts.',
+  },
+  'panel.no_empty_label_note': {
+    en: 'Hides this tabs panel from switching/navigation when it has no visible tabs.',
+  },
+  'panel.new_tab_ctx_note': {
+    en: 'Container used for new tabs opened from this tabs panel.',
+  },
+  'panel.new_tab_ctx_reopen_note': {
+    en: 'Reopens new tabs in the selected container when Firefox creates them in the wrong context. Requires page access permission.',
+  },
+  'panel.drop_tab_ctx_note': {
+    en: 'Container applied to tabs dropped into this tabs panel.',
+  },
+  'panel.bookmarks_view_mode_note': {
+    en: 'Chooses whether this bookmarks panel behaves like a folder tree or a history-style list.',
+  },
+  'panel.auto_convert_note': {
+    en: 'Automatically converts supported bookmark folders into Sidebery tabs panels.',
+  },
+  'panel.move_excluded_to_note': {
+    en: 'Where to move tabs that are excluded by this panel’s move rules.',
   },
 
   // - Containers

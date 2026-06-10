@@ -58,9 +58,6 @@ export const DEFAULT_SETTINGS: SettingsState = {
   // Containers
   containersSortByName: false,
 
-  // Panels
-  skipEmptyPanels: false,
-
   // Drag and drop
   dndTabAct: true,
   dndTabActDelay: 750,

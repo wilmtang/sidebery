@@ -36,6 +36,7 @@
     TextField(
       ref="proxyHostInput"
       label="Host"
+      :note="translate('container.proxy_host_note')"
       :or="translate('container.proxy_host_placeholder')"
       :line="true"
       :value="proxyHost"
@@ -45,6 +46,7 @@
     TextField(
       ref="proxyPortInput"
       label="Port"
+      :note="translate('container.proxy_port_note')"
       :or="translate('container.proxy_port_placeholder')"
       :line="true"
       :value="proxyPort"
@@ -54,6 +56,7 @@
     TextField(
       ref="proxyUsernameInput"
       label="Username"
+      :note="translate('container.proxy_username_note')"
       :or="translate('container.proxy_username_placeholder')"
       :line="true"
       :value="proxyUsername"
@@ -62,6 +65,7 @@
     TextField(
       ref="proxyPasswordInput"
       label="Password"
+      :note="translate('container.proxy_password_note')"
       :or="translate('container.proxy_password_placeholder')"
       :line="true"
       :value="proxyPassword"

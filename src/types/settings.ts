@@ -36,7 +36,7 @@ export interface SettingsState {
   navBarInline: boolean
   navBarSide: (typeof SETTINGS_OPTIONS.navBarSide)[number]
   navBtnCount: boolean
-  skipEmptyPanels: boolean
+  skipEmptyPanels?: boolean // DEPR: Use hideEmptyPanels
   hideEmptyPanels: boolean
   hideDiscardedTabPanels: boolean
   navSwitchPanelsWheel: boolean

@@ -4,6 +4,7 @@ section(ref="el")
   span.header-shadow
   SelectField(
     label="settings.group_layout"
+    :note="translate('settings.group_layout_note')"
     optLabel="settings.group_layout_"
     v-model:value="Settings.state.groupLayout"
     dbg="groupLayout"
@@ -13,12 +14,14 @@ section(ref="el")
   .sub-title: .text {{translate('settings.native_groups_title')}}
   ToggleField(
     label="settings.native_groups_show_in_sidebar"
+    :note="translate('settings.native_groups_show_in_sidebar_note')"
     v-model:value="Settings.state.nativeGroupsShowInSidebar"
     dbg="nativeGroupsShowInSidebar"
     :default="DEFAULT_SETTINGS.nativeGroupsShowInSidebar"
     @update:value="Settings.saveDebounced(150)")
   ToggleField(
     label="settings.native_groups_show_colored_rails"
+    :note="translate('settings.native_groups_show_colored_rails_note')"
     v-model:value="Settings.state.nativeGroupsShowColoredRails"
     dbg="nativeGroupsShowColoredRails"
     :default="DEFAULT_SETTINGS.nativeGroupsShowColoredRails"
@@ -26,6 +29,7 @@ section(ref="el")
     @update:value="Settings.saveDebounced(150)")
   ToggleField(
     label="settings.native_groups_create_sidebery_page"
+    :note="translate('settings.native_groups_create_sidebery_page_note')"
     v-model:value="Settings.state.nativeGroupsCreateSideberyPage"
     dbg="nativeGroupsCreateSideberyPage"
     :default="DEFAULT_SETTINGS.nativeGroupsCreateSideberyPage"

@@ -24,3 +24,8 @@ export function translate(id?: string, ...args: (number | string | undefined)[])
   if (isString(record)) return record
   else return record(...args)
 }
+
+export function translateIfExists(id?: string, ...args: (number | string | undefined)[]): string {
+  if (!id || dict[id] === undefined) return ''
+  return translate(id, ...args)
+}

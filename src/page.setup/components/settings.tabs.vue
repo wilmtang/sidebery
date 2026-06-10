@@ -221,6 +221,7 @@ section(ref="el")
       ToggleField(
         v-else
         label="settings.move_new_tab_parent_indent"
+        dbg="moveNewTabParentIndent"
         :inactive="true"
         v-bind:value="Settings.state.tabsTree && (Settings.state.moveNewTabParent === 'first_child' || Settings.state.moveNewTabParent === 'last_child')")
       ToggleField(
@@ -304,7 +305,7 @@ section(ref="el")
     .sub-fields
       ToggleField(
         label="settings.pinned.no_unload_explicit"
-        dbg="pinnedNoUnloadPanel"
+        dbg="pinnedNoUnloadExplicit"
         v-model:value="Settings.state.pinnedNoUnloadExplicit"
         :inactive="!Settings.state.pinnedNoUnload"
         :default="DEFAULT_SETTINGS.pinnedNoUnloadExplicit"

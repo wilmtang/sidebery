@@ -41,6 +41,7 @@ Firefox extension for managing tabs and bookmarks in sidebar.
 [Install](https://addons.mozilla.org/firefox/downloads/file/4766841/sidebery-5.5.2.xpi) (reviewed by Mozilla)  
 **Nightly** (v5.5.2.2):
 [Install](https://github.com/mbnuqw/sidebery/releases/download/v5.5.2/sidebery-5.5.2.2.xpi)
+
 > [!NOTE]
 > Nightly release is a signed build created via [github actions](https://github.com/mbnuqw/sidebery/actions/workflows/nightly-release.yml). It supports an auto-updates and is designed for testing new features. A few previous nightly releases can be found in the Assets section of the latest [release notes](https://github.com/mbnuqw/sidebery/releases).
 >
@@ -59,6 +60,21 @@ Sidebery is a highly configurable sidebar with panels of different types. Some o
 - Snapshots (saved windows/panels/tabs)
 - ...and more
 
+## Native Firefox Tab Groups
+
+This fork adds native Firefox tab group support while keeping Sidebery's existing tree, visibility, search, and group-page behavior intact.
+
+The implementation follows the same broad model used by Tree Style Tab: Firefox tab groups are tracked as their own sidebar items, tab membership is derived from each tab's `groupId`, and tab group updates refresh both the group header and affected member tabs. Sidebery still lets older settings decide the visible tab list first, then applies native group collapse rules on top so folded tabs, hidden inactive panels, unloaded-tab hiding, and search filtering continue to work.
+
+Recent native group work in this fork:
+
+- Native Firefox group headers are shown in the tabs panel and mirror Firefox's collapsed/expanded state.
+- Collapsed native groups hide inactive member tabs in Sidebery while keeping the active member visible.
+- Group colors use Firefox's native group color, including compatibility for Firefox's `gray` color and Sidebery's older `grey` color name.
+- Colored member rails now stay aligned through indented child tabs instead of drifting after the first tab.
+- Collapsed group headers switch to a pale group-colored style, matching Firefox and Tree Style Tab more closely.
+- Native group settings now include notes explaining what each option changes and how it interacts with older Sidebery settings.
+
 ## Incompatibility with other addons
 
 Sidebery may conflict with addons that handle position of new tabs (e.g. Tree Style Tabs) or addons that move/sort tabs, which may result in unexpected behavior or broken tabs state at initialization. To avoid potential issues, please, disable such addons in Add-ons Manager page (about:addons).
@@ -68,6 +84,7 @@ Sidebery may conflict with addons that handle position of new tabs (e.g. Tree St
 <details><summary><b> Option 1 (Activating native vertical tabs) </b></summary>
 
 Enable native vertical tabs. This can be done in one of the following ways:
+
 - Right-click on the free space of the toolbar or tab-bar and click on the "Turn on Vertical Tabs".
 - Open `about:config` and enable these settings: `sidebar.revamp`, `sidebar.verticalTabs`.
 
@@ -88,7 +105,7 @@ You can also try to hide vertical native tabs and sidebar: Right-click on the fr
 - Learn how to [comment/uncomment](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Syntax/Comments) parts of your CSS.
 - Enable `toolkit.legacyUserProfileCustomizations.stylesheets` in `about:config`.
 - In 'Profile Directory' `(Firefox Menu > Help > Troubleshooting Information > Profile Directory)`
-create folder `chrome` with file `userChrome.css`.
+  create folder `chrome` with file `userChrome.css`.
 - Paste, edit (to your needs) and save this code in `userChrome.css` file:
 
   ```css
@@ -106,8 +123,8 @@ create folder `chrome` with file `userChrome.css`.
   * - When Sidebery set title preface "."
   * - When Sidebery sidebar is active
   */
-  #main-window[titlepreface="."] {
-  /* #main-window:has(#sidebar-box[sidebarcommand="_3c078156-979c-498b-8990-85f7987dd929_-sidebar-action"][checked="true"]) { */
+  #main-window[titlepreface='.'] {
+    /* #main-window:has(#sidebar-box[sidebarcommand="_3c078156-979c-498b-8990-85f7987dd929_-sidebar-action"][checked="true"]) { */
 
     /* Hide horizontal native tabs toolbar */
     #TabsToolbar > * {
@@ -120,7 +137,8 @@ create folder `chrome` with file `userChrome.css`.
     }
 
     /* Hide new Firefox sidebar, restyle addon's sidebar */
-    #sidebar-main, #sidebar-launcher-splitter {
+    #sidebar-main,
+    #sidebar-launcher-splitter {
       display: none !important;
     }
     #sidebar-box {
@@ -137,7 +155,7 @@ create folder `chrome` with file `userChrome.css`.
       min-width: var(--splitter-width) !important;
       width: var(--splitter-width) !important;
       padding: 0 !important;
-      margin: 0 calc(-1*var(--splitter-width) + 1px) 0 0 !important;
+      margin: 0 calc(-1 * var(--splitter-width) + 1px) 0 0 !important;
       border: 0 !important;
       opacity: 0 !important;
     }
@@ -189,22 +207,23 @@ Result:
     box-shadow: none;
   }
   .NavigationBar.-vert {
-    padding: var(--nav-btn-margin) 0 0
+    padding: var(--nav-btn-margin) 0 0;
   }
-  #root[data-pinned-tabs-position="left"]:not([data-nav-layout="horizontal"]) .PinnedTabsBar,
-  #root[data-pinned-tabs-position="right"]:not([data-nav-layout="horizontal"]) .PinnedTabsBar {
+  #root[data-pinned-tabs-position='left']:not([data-nav-layout='horizontal']) .PinnedTabsBar,
+  #root[data-pinned-tabs-position='right']:not([data-nav-layout='horizontal']) .PinnedTabsBar {
     padding: var(--general-margin) 0 calc(var(--tabs-margin) * 2);
   }
-  #root[data-pinned-tabs-position="left"][data-nav-layout="left"][data-drag="true"] .PinnedTabsBar,
-  #root[data-pinned-tabs-position="right"][data-nav-layout="right"][data-drag="true"] .PinnedTabsBar {
-    padding: var(--general-margin) 0 16px
+  #root[data-pinned-tabs-position='left'][data-nav-layout='left'][data-drag='true'] .PinnedTabsBar,
+  #root[data-pinned-tabs-position='right'][data-nav-layout='right'][data-drag='true']
+    .PinnedTabsBar {
+    padding: var(--general-margin) 0 16px;
   }
 
   /* Rounded transition between Sidebery nav-bar and Firefox toolbar */
   .main-box {
     --rounding: calc(var(--general-border-radius) + var(--general-margin));
   }
-  #root[data-nav-layout="left"] .main-box:before {
+  #root[data-nav-layout='left'] .main-box:before {
     content: '';
     position: absolute;
     top: 0;
@@ -225,13 +244,17 @@ Result:
 
   <img width="214" alt="222" src="https://github.com/user-attachments/assets/d605e088-d66b-450e-aab3-36a727e91feb" />
 
-  </details>  
+  </details>
 
   <details><summary>Full width pinned tabs</summary>
 
   ```css
-  #root.root {--tabs-pinned-height: 32px;}
-  #root.root {--tabs-pinned-width: 36px;}
+  #root.root {
+    --tabs-pinned-height: 32px;
+  }
+  #root.root {
+    --tabs-pinned-width: 36px;
+  }
 
   #root.root .PinnedTabsBar .tab-wrapper {
     width: auto;
@@ -246,7 +269,7 @@ Result:
   #root.root .PinnedTabsBar .tab-wrapper .Tab .body {
     --tabs-normal-bg: #ffffff0f;
   }
-  #root.root .PinnedTabsBar .tab-wrapper .Tab[data-discarded="true"] .body {
+  #root.root .PinnedTabsBar .tab-wrapper .Tab[data-discarded='true'] .body {
     --tabs-normal-bg: #ffffff06;
   }
   ```
@@ -259,7 +282,6 @@ Result:
   That's basically all custom styles I use myself. I'll try to keep this `userChrome` snippet updated (relative to the beta version of Firefox).
 
   For more features and other styling options/themes check out these resources:
-
   - https://github.com/search?q=sidebery+language%3ACSS&type=repositories&s=stars&o=desc
   - https://www.reddit.com/r/FirefoxCSS/search?q=sidebery&restrict_sr=on&sort=relevance&t=all
   - https://trickypr.github.io/FirefoxCSS-Store.github.io/index.html
@@ -343,6 +365,20 @@ npm run dev.run -- /path/to/firefox-executable
 ```
 
 Examples include Firefox Developer Edition, Firefox Nightly, Zen, and Floorp.
+
+### Automated Firefox extension test
+
+To run a real Firefox WebExtension smoke test for native tab groups:
+
+```bash
+npm run test.e2e.firefox
+```
+
+This builds `addon/`, installs it in an isolated temporary Firefox profile through Selenium/Geckodriver, creates a real native Firefox tab group, and verifies Sidebery's group header, colored rails, and collapsed color state. See [docs/extension-testing.md](docs/extension-testing.md) for the full process and environment options.
+
+### Settings audit notes
+
+The setup page now has automatic setting-note lookup for shared field controls, plus English descriptions for every visible settings/keybinding control found by the current audit. See [docs/settings-audit.md](docs/settings-audit.md) for the coverage rule, hidden preference classification, and the `skipEmptyPanels` legacy-setting fix.
 
 ## Donate
 

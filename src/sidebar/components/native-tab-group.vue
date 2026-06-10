@@ -20,7 +20,6 @@
 import { computed } from 'vue'
 import { MenuType } from 'src/enums'
 import { translate } from 'src/dict'
-import * as D from 'src/defaults'
 import * as Tabs from 'src/services/tabs.fg'
 import * as Menu from 'src/services/menu.fg'
 import * as Selection from 'src/services/selection.fg'
@@ -40,7 +39,7 @@ const count = computed(() => {
 })
 const title = computed(() => group.value?.title || translate('menu.tab.group'))
 const selected = computed(() => Tabs.reactive.nativeGroupsSelectedId === props.groupId)
-const color = computed(() => D.RGB_COLORS[group.value?.color ?? 'toolbar'])
+const color = computed(() => Tabs.getNativeGroupColorValue(group.value))
 
 function onMouseDown(e: MouseEvent): void {
   Mouse.setTarget('native-group', props.groupId)

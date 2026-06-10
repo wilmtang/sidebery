@@ -36,6 +36,7 @@
     :data-start="guide.nativeGroupThread.start"
     :data-middle="guide.nativeGroupThread.middle"
     :data-end="guide.nativeGroupThread.end"
+    :data-collapsed="guide.nativeGroupThread.collapsed"
     :style="{ '--native-group-color': guide.nativeGroupThread.color }")
   .body
     .tree-guides(v-if="!iconOnly && Settings.state.tabsLvlDots && !tab.reactive.customTitleEdit")

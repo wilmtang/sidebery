@@ -48,6 +48,7 @@ export async function load(): Promise<void> {
 
   Utils.normalizeObject(storedManaged.settings, storedLocal.settings)
   const groupOnOpen = storedManaged.settings.groupOnOpen
+  if (migrateStoredSettings(storedManaged.settings)) initSaveNeeded = true
   Utils.normalizeObject(storedManaged.settings, DEFAULT_SETTINGS)
   Utils.updateObject(state, storedManaged.settings, state)
 
@@ -79,6 +80,21 @@ export async function load(): Promise<void> {
   }
 
   updPrecalcSettings()
+}
+
+export function migrateStoredSettings(settings: SettingsState): boolean {
+  let saveNeeded = false
+
+  if (settings.skipEmptyPanels !== undefined) {
+    if (settings.skipEmptyPanels && settings.hideEmptyPanels === undefined) {
+      settings.hideEmptyPanels = true
+    }
+
+    delete settings.skipEmptyPanels
+    saveNeeded = true
+  }
+
+  return saveNeeded
 }
 
 export function updPrecalcSettings() {

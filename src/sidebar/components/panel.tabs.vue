@@ -69,6 +69,7 @@ type TreeGuideSlot = {
 }
 type NativeGroupThread = {
   color: string
+  collapsed: boolean
   start: boolean
   middle: boolean
   end: boolean
@@ -141,7 +142,8 @@ function getNativeGroupThread(tab: Tab, visibleTabs: Tab[]): NativeGroupThread |
   const end = !visibleTabs.slice(index + 1).some(t => t.groupId === tab.groupId)
 
   return {
-    color: D.RGB_COLORS[nativeGroup.color ?? 'toolbar'],
+    color: Tabs.getNativeGroupColorValue(nativeGroup),
+    collapsed: nativeGroup.collapsed,
     start,
     middle: !start && !end,
     end,

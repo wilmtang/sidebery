@@ -12,7 +12,7 @@
     .label(:style="{ color: props.color }") {{translate(props.label)}}
     LoadingDots(v-if="loading")
     ToggleInput.input(ref="inputComponent" :value="props.value")
-  .note(v-if="props.note") {{props.note}}
+  .note(v-if="autoNote") {{autoNote}}
   .note(v-if="props.noteWithLinks" @click.stop="")
     template(v-for="v, i in getNoteWithLinksParts(props.noteWithLinks)")
       template(v-if="!(i%2)") {{v}}
@@ -21,8 +21,8 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue'
-import { translate } from 'src/dict'
+import { computed, ref } from 'vue'
+import { translate, translateIfExists } from 'src/dict'
 import type { ToggleInputComponent } from 'src/types'
 import ToggleInput from './toggle-input.vue'
 import LoadingDots from './loading-dots.vue'
@@ -43,6 +43,14 @@ interface ToggleFieldProps {
 const emit = defineEmits(['toggle', 'update:value'])
 const props = defineProps<ToggleFieldProps>()
 const inputComponent = ref<ToggleInputComponent | null>(null)
+const autoNote = computed(() => {
+  if (props.note) return props.note
+
+  const dbgNote = translateIfExists(props.dbg ? `settings.notes.${props.dbg}` : undefined)
+  if (dbgNote) return dbgNote
+
+  return translateIfExists(`${props.label}_note`)
+})
 
 let rangeIsSelected = false
 

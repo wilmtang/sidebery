@@ -48,6 +48,7 @@
   --tabs-tree-guide-color: #00000052
 
 .Tab
+  --tab-lvl: 16
   position: relative
   contain: size layout style
   width: calc(100% - var(--tabs-margin) * 2)
@@ -59,36 +60,52 @@
 
   padding-left: calc(var(--tabs-indent) * 16)
   &[data-lvl="0"]
+    --tab-lvl: 0
     padding-left: 0
   &[data-lvl="1"]
+    --tab-lvl: 1
     padding-left: var(--tabs-indent)
   &[data-lvl="2"]
+    --tab-lvl: 2
     padding-left: calc(var(--tabs-indent) * 2)
   &[data-lvl="3"]
+    --tab-lvl: 3
     padding-left: calc(var(--tabs-indent) * 3)
   &[data-lvl="4"]
+    --tab-lvl: 4
     padding-left: calc(var(--tabs-indent) * 4)
   &[data-lvl="5"]
+    --tab-lvl: 5
     padding-left: calc(var(--tabs-indent) * 5)
   &[data-lvl="6"]
+    --tab-lvl: 6
     padding-left: calc(var(--tabs-indent) * 6)
   &[data-lvl="7"]
+    --tab-lvl: 7
     padding-left: calc(var(--tabs-indent) * 7)
   &[data-lvl="8"]
+    --tab-lvl: 8
     padding-left: calc(var(--tabs-indent) * 8)
   &[data-lvl="9"]
+    --tab-lvl: 9
     padding-left: calc(var(--tabs-indent) * 9)
   &[data-lvl="10"]
+    --tab-lvl: 10
     padding-left: calc(var(--tabs-indent) * 10)
   &[data-lvl="11"]
+    --tab-lvl: 11
     padding-left: calc(var(--tabs-indent) * 11)
   &[data-lvl="12"]
+    --tab-lvl: 12
     padding-left: calc(var(--tabs-indent) * 12)
   &[data-lvl="13"]
+    --tab-lvl: 13
     padding-left: calc(var(--tabs-indent) * 13)
   &[data-lvl="14"]
+    --tab-lvl: 14
     padding-left: calc(var(--tabs-indent) * 14)
   &[data-lvl="15"]
+    --tab-lvl: 15
     padding-left: calc(var(--tabs-indent) * 15)
   
   &[data-loading="true"]
@@ -124,6 +141,9 @@
   transform: translateY(-8px)
 
 .NativeTabGroup
+  --native-group-pale-color: unquote('color-mix(in srgb, var(--native-group-color) 18%, var(--tabs-normal-bg))')
+  --native-group-border-color: unquote('color-mix(in srgb, var(--native-group-color) 72%, transparent)')
+  --native-group-count-bg: unquote('color-mix(in srgb, var(--native-group-color) 12%, transparent)')
   position: relative
   contain: size layout style
   width: calc(100% - var(--tabs-margin) * 2)
@@ -169,6 +189,24 @@
 .NativeTabGroup[data-selected="true"] .body:before
   background-color: var(--frame-el-overlay-selected-bg)
   box-shadow: inset 0 0 0 1px var(--frame-el-overlay-selected-border)
+
+.NativeTabGroup[data-collapsed="true"] .body
+  background-color: var(--native-group-pale-color)
+  box-shadow: var(--frame-el-shadow),
+              inset 0 0 0 1px var(--native-group-border-color)
+
+.NativeTabGroup[data-collapsed="true"] .color-layer
+  opacity: .08
+
+.NativeTabGroup[data-collapsed="true"] .title
+.NativeTabGroup[data-collapsed="true"] .exp-icon
+  color: var(--native-group-color)
+  fill: var(--native-group-color)
+  text-shadow: none
+
+.NativeTabGroup[data-collapsed="true"] .count
+  color: var(--native-group-color)
+  background-color: var(--native-group-count-bg)
 
 .NativeTabGroup .color-layer
   position: absolute
@@ -384,7 +422,7 @@
 .Tab .native-group-thread
   position: absolute
   top: -1px
-  left: 0
+  left: calc(var(--tabs-indent) * var(--tab-lvl, 0) * -1)
   width: var(--tabs-native-group-rail-width)
   height: calc(100% + 2px)
   border-radius: 0
@@ -416,6 +454,9 @@
 
 #root[data-search="true"] .Tab .tree-guides
   display: none
+
+#root[data-search="true"] .Tab .native-group-thread
+  left: 0
 
 // ---
 // -- Color layer
