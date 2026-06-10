@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import * as Settings from 'src/services/settings'
 import * as Tabs from 'src/services/tabs.fg'
-import { MTab, resetMTabs } from 'src/defaults/mocks.tabs.fg'
+import { MTab, addMTab, resetMTabs } from 'src/defaults/mocks.tabs.fg'
 
 describe('Tabs.isTabVisibleInNativeGroup()', () => {
   beforeEach(() => {
@@ -41,6 +41,28 @@ describe('Tabs.isTabVisibleInNativeGroup()', () => {
     const tab = new MTab({ active: true, groupId: 42 })
 
     expect(Tabs.isTabVisibleInNativeGroup(tab)).toBe(true)
+  })
+
+  test('inherits visual native group membership from grouped ancestors', () => {
+    const parent = addMTab({ id: 1, groupId: 42 })
+    const child = addMTab({ id: 2, parentId: parent.id })
+
+    expect(Tabs.getVisualNativeGroupId(child)).toBe(42)
+  })
+
+  test('hides inactive tree descendants of collapsed native groups', () => {
+    const parent = addMTab({ id: 1, groupId: 42 })
+    const child = addMTab({ id: 2, parentId: parent.id })
+
+    expect(Tabs.isTabVisibleInNativeGroup(child)).toBe(false)
+  })
+
+  test('keeps tree descendants visible when the native group is expanded', () => {
+    Tabs.reactive.nativeGroups[42].collapsed = false
+    const parent = addMTab({ id: 1, groupId: 42 })
+    const child = addMTab({ id: 2, parentId: parent.id })
+
+    expect(Tabs.isTabVisibleInNativeGroup(child)).toBe(true)
   })
 
   test('keeps tabs visible when the native group is expanded', () => {

@@ -93,8 +93,9 @@ const visibleItems = computed<VisibleItem[]>(() => {
   const visibleTabs = tabs.filter(tab => Tabs.isTabVisibleInNativeGroup(tab))
 
   for (const tab of tabs) {
+    const nativeGroupId = Tabs.getVisualNativeGroupId(tab)
     if (Tabs.shouldShowNativeGroupBeforeTab(tab, prevTab)) {
-      items.push({ type: 'group', id: tab.groupId as ID, key: `g:${tab.groupId}` })
+      items.push({ type: 'group', id: nativeGroupId as ID, key: `g:${nativeGroupId}` })
     }
 
     if (Tabs.isTabVisibleInNativeGroup(tab)) {
@@ -132,14 +133,19 @@ function getNativeGroupThread(tab: Tab, visibleTabs: Tab[]): NativeGroupThread |
     return
   }
 
-  const nativeGroup = Tabs.getNativeGroup(tab.groupId)
+  const nativeGroupId = Tabs.getVisualNativeGroupId(tab)
+  const nativeGroup = Tabs.getNativeGroup(nativeGroupId)
   if (!nativeGroup) return
 
   const index = visibleTabs.indexOf(tab)
   if (index === -1) return
 
-  const start = !visibleTabs.slice(0, index).some(t => t.groupId === tab.groupId)
-  const end = !visibleTabs.slice(index + 1).some(t => t.groupId === tab.groupId)
+  const start = !visibleTabs
+    .slice(0, index)
+    .some(t => Tabs.getVisualNativeGroupId(t) === nativeGroupId)
+  const end = !visibleTabs
+    .slice(index + 1)
+    .some(t => Tabs.getVisualNativeGroupId(t) === nativeGroupId)
 
   return {
     color: Tabs.getNativeGroupColorValue(nativeGroup),

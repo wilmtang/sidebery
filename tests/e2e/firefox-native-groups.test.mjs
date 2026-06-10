@@ -73,11 +73,18 @@ test(
 
     const expanded = await waitFor(async () => {
       const snapshot = await getNativeGroupSnapshot(driver)
-      if (snapshot.group?.collapsed === 'false' && snapshot.rails.length === 3) return snapshot
+      const childTab = snapshot.tabs.find(tab => tab.id === String(nativeGroup.childId))
+      if (
+        snapshot.group?.collapsed === 'false' &&
+        snapshot.rails.length === 4 &&
+        childTab?.hasRail
+      ) {
+        return snapshot
+      }
     }, 'expanded native group rails')
 
     assert.equal(expanded.group.color, BLUE)
-    assert.equal(expanded.rails.length, 3)
+    assert.equal(expanded.rails.length, 4)
     assert.deepEqual(
       expanded.rails.map(rail => ({
         start: rail.start,
@@ -87,8 +94,14 @@ test(
       [
         { start: true, middle: false, end: false },
         { start: false, middle: true, end: false },
+        { start: false, middle: true, end: false },
         { start: false, middle: false, end: true },
       ]
+    )
+    assert.notEqual(
+      expanded.group.titleColor,
+      BLUE_RGB,
+      'Expanded group headers should keep normal text color instead of reading like collapsed pills'
     )
     assert.ok(
       expanded.rails.every(rail => rail.color === BLUE_RGB),
@@ -125,6 +138,11 @@ test(
     }, 'collapsed native group color state')
 
     assert.equal(collapsed.group.titleColor, ORANGE_RGB)
+    assert.notEqual(
+      collapsed.group.colorLayerOpacity,
+      expanded.group.colorLayerOpacity,
+      'Collapsed and expanded group headers should use different color fill strength'
+    )
     assert.equal(collapsed.rails[0].color, ORANGE_RGB)
     assert.deepEqual(
       {
@@ -193,20 +211,41 @@ async function createNativeGroup(driver) {
   const result = await runExtensionAsync(
     driver,
     async title => {
-      const tabs = []
-      for (let i = 1; i <= 3; i++) {
-        tabs.push(
-          await browser.tabs.create({ url: `about:blank#sidebery-e2e-${i}`, active: false })
+      const parent = await browser.tabs.create({
+        url: 'about:blank#sidebery-e2e-parent',
+        active: false,
+      })
+      const child = await browser.tabs.create({
+        url: 'about:blank#sidebery-e2e-child',
+        active: false,
+        openerTabId: parent.id,
+      })
+      const siblings = []
+      for (let i = 1; i <= 2; i++) {
+        siblings.push(
+          await browser.tabs.create({
+            url: `about:blank#sidebery-e2e-sibling-${i}`,
+            active: false,
+          })
         )
       }
+      const groupedTabIds = [parent.id, ...siblings.map(tab => tab.id)]
 
-      const groupId = await browser.tabs.group({ tabIds: tabs.map(tab => tab.id) })
+      const groupId = await browser.tabs.group({ tabIds: groupedTabIds })
+      const noneGroupId = browser.tabGroups?.TAB_GROUP_ID_NONE ?? -1
+      const childAfterGrouping = await browser.tabs.get(child.id)
+      if (childAfterGrouping.groupId !== noneGroupId) {
+        await browser.tabs.ungroup(child.id)
+        await browser.tabs.update(child.id, { openerTabId: parent.id })
+      }
+
       await browser.tabGroups.update(groupId, { title, color: 'blue' })
-      await browser.tabs.update(tabs[1].id, { active: true })
+      await browser.tabs.update(siblings[0].id, { active: true })
 
       return {
+        childId: child.id,
         groupId,
-        tabIds: tabs.map(tab => tab.id),
+        tabIds: [...groupedTabIds, child.id],
       }
     },
     TEST_GROUP_TITLE
@@ -216,7 +255,7 @@ async function createNativeGroup(driver) {
     Number.isFinite(result.groupId),
     `Cannot create native tab group: ${JSON.stringify(result)}`
   )
-  assert.equal(result.tabIds.length, 3)
+  assert.equal(result.tabIds.length, 4)
   return result
 }
 
@@ -251,6 +290,7 @@ async function getNativeGroupSnapshot(driver) {
       return {
         group: group && {
           collapsed: group.dataset.collapsed,
+          colorLayerOpacity: getComputedStyle(group.querySelector('.color-layer')).opacity,
           color: getComputedStyle(group).getPropertyValue('--native-group-color').trim(),
           text: group.textContent,
           titleColor: getComputedStyle(group.querySelector('.title')).color,
@@ -271,6 +311,8 @@ async function getNativeGroupSnapshot(driver) {
         }),
         tabs: [...document.querySelectorAll('.Tab')].map(el => ({
           hasRail: !!el.querySelector('.native-group-thread'),
+          id: el.id.replace(/^tab/, ''),
+          lvl: el.dataset.lvl,
           text: el.textContent,
         })),
       };

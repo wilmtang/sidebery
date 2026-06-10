@@ -141,9 +141,10 @@
   transform: translateY(-8px)
 
 .NativeTabGroup
-  --native-group-pale-color: unquote('color-mix(in srgb, var(--native-group-color) 18%, var(--tabs-normal-bg))')
+  --native-group-expanded-border-color: unquote('color-mix(in srgb, var(--native-group-color) 42%, transparent)')
+  --native-group-pale-color: unquote('color-mix(in srgb, var(--native-group-color) 28%, var(--tabs-normal-bg))')
   --native-group-border-color: unquote('color-mix(in srgb, var(--native-group-color) 72%, transparent)')
-  --native-group-count-bg: unquote('color-mix(in srgb, var(--native-group-color) 12%, transparent)')
+  --native-group-count-bg: unquote('color-mix(in srgb, var(--native-group-color) 16%, transparent)')
   position: relative
   contain: size layout style
   width: calc(100% - var(--tabs-margin) * 2)
@@ -167,7 +168,7 @@
   border-radius: var(--tabs-border-radius)
   background-color: var(--tabs-normal-bg)
   box-shadow: var(--frame-el-shadow),
-              inset 0 0 0 1px var(--native-group-color)
+              inset 0 0 0 1px var(--native-group-expanded-border-color)
   overflow: hidden
   border-left: 5px solid var(--native-group-color)
   &:before
@@ -196,7 +197,7 @@
               inset 0 0 0 1px var(--native-group-border-color)
 
 .NativeTabGroup[data-collapsed="true"] .color-layer
-  opacity: .08
+  opacity: .16
 
 .NativeTabGroup[data-collapsed="true"] .title
 .NativeTabGroup[data-collapsed="true"] .exp-icon
@@ -215,7 +216,7 @@
   width: 100%
   height: 100%
   background-color: var(--native-group-color)
-  opacity: .24
+  opacity: .06
 
 .NativeTabGroup .exp
   position: relative
@@ -422,7 +423,7 @@
 .Tab .native-group-thread
   position: absolute
   top: -1px
-  left: calc(var(--tabs-indent) * var(--tab-lvl, 0) * -1)
+  left: 0
   width: var(--tabs-native-group-rail-width)
   height: calc(100% + 2px)
   border-radius: 0

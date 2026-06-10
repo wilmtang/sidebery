@@ -30,6 +30,20 @@ export function hasNativeGroup(tab?: T.Tab | null): boolean {
   return tab.groupId !== undefined && tab.groupId !== getNativeGroupIdNone()
 }
 
+export function getVisualNativeGroupId(tab?: T.Tab | null): ID | undefined {
+  if (!tab || !nativeGroupsSupported()) return
+  if (hasNativeGroup(tab)) return tab.groupId
+
+  const seen = new Set<ID>([tab.id])
+  let parent = Tabs.byId[tab.parentId]
+
+  while (parent && !seen.has(parent.id)) {
+    if (hasNativeGroup(parent)) return parent.groupId
+    seen.add(parent.id)
+    parent = Tabs.byId[parent.parentId]
+  }
+}
+
 export function getNativeGroup(groupId?: ID): T.NativeTabGroup | undefined {
   if (groupId === undefined || groupId === getNativeGroupIdNone()) return
   return Tabs.reactive.nativeGroups[groupId]
@@ -177,17 +191,23 @@ export function isNativeGroupCollapsed(groupId?: ID): boolean {
 
 export function isTabVisibleInNativeGroup(tab?: T.Tab): boolean {
   if (!Settings.state.nativeGroupsShowInSidebar) return true
-  if (!hasNativeGroup(tab)) return true
   if (!tab) return true
-  if (!isNativeGroupCollapsed(tab.groupId)) return true
+
+  const groupId = getVisualNativeGroupId(tab)
+  if (groupId === undefined) return true
+  if (!isNativeGroupCollapsed(groupId)) return true
+
   return tab.active || tab.reactive.active
 }
 
 export function shouldShowNativeGroupBeforeTab(tab?: T.Tab, prevTab?: T.Tab): boolean {
   if (!Settings.state.nativeGroupsShowInSidebar) return false
-  if (!hasNativeGroup(tab)) return false
   if (!tab) return false
-  return tab.groupId !== prevTab?.groupId
+
+  const groupId = getVisualNativeGroupId(tab)
+  if (groupId === undefined) return false
+
+  return groupId !== getVisualNativeGroupId(prevTab)
 }
 
 export function getNativeGroupTabs(groupId: ID, includeSideberyPage = false): T.Tab[] {
