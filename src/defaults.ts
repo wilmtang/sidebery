@@ -143,6 +143,20 @@ export const COLOR_OPTS = [
   { value: 'pink', color: 'pink' },
   { value: 'purple', color: 'purple' },
 ]
+export const NATIVE_GROUP_COLOR_OPTS: {
+  value: browser.tabGroups.Color
+  color: browser.ColorName
+}[] = [
+  { value: 'blue', color: 'blue' },
+  { value: 'cyan', color: 'cyan' },
+  { value: 'green', color: 'green' },
+  { value: 'yellow', color: 'yellow' },
+  { value: 'orange', color: 'orange' },
+  { value: 'red', color: 'red' },
+  { value: 'pink', color: 'pink' },
+  { value: 'purple', color: 'purple' },
+  { value: 'gray', color: 'grey' },
+]
 export const TAB_BOOKMARK_COLOR: Record<string, string> = {
   blue: 'c1',
   turquoise: 'c2',

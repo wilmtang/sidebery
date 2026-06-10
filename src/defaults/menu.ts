@@ -148,10 +148,19 @@ export const NEW_TAB_MENU: MenuConf = [
 ]
 
 export const NATIVE_TAB_GROUP_MENU: MenuConf = [
-  'createSideberyGroupPage',
-  'renameNativeTabGroup',
-  'toggleNativeTabGroup',
-  'ungroupNativeTabGroup',
+  {
+    opts: [
+      'createSideberyGroupPage',
+      'renameNativeTabGroup',
+      'toggleNativeTabGroup',
+      'ungroupNativeTabGroup',
+    ],
+  },
+  {
+    opts: ['colorizeNativeTabGroup'],
+  },
+  'separator-native-tab-group',
+  ...TABS_MENU,
 ]
 
 // TODO: rm

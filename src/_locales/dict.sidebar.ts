@@ -1281,6 +1281,9 @@ export const sidebarTranslations: Translations = {
     zh_TW: '藍色',
     ja: '青色',
   },
+  'colors.cyan': {
+    en: 'Cyan',
+  },
   'colors.turquoise': {
     en: 'Turquoise',
     de: 'Türkis',
@@ -1302,6 +1305,9 @@ export const sidebarTranslations: Translations = {
     zh_CN: '绿色',
     zh_TW: '綠色',
     ja: '緑色',
+  },
+  'colors.grey': {
+    en: 'Grey',
   },
   'colors.yellow': {
     en: 'Yellow',

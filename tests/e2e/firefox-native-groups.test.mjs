@@ -15,10 +15,13 @@ const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const ADDON_DIR = path.join(ROOT_DIR, 'addon')
 const EXTENSION_ID = '{3c078156-979c-498b-8990-85f7987dd929}'
 const TEST_GROUP_TITLE = 'Sidebery E2E Native Group'
+const RENAMED_GROUP_TITLE = 'Sidebery E2E Renamed Native Group'
 const BLUE = '#37adff'
 const BLUE_RGB = 'rgb(55, 173, 255)'
 const ORANGE = '#ff9f00'
 const ORANGE_RGB = 'rgb(255, 159, 0)'
+const PURPLE = '#af51f5'
+const PURPLE_RGB = 'rgb(175, 81, 245)'
 const DEFAULT_TIMEOUT = Number(process.env.SIDEBERY_E2E_TIMEOUT || 90000)
 const POLL_INTERVAL = 250
 
@@ -115,6 +118,61 @@ test(
       railsShareLeftEdge(expanded.rails),
       `Expected rail left edges to stay aligned after the first tab: ${JSON.stringify(expanded.rails)}`
     )
+    assert.ok(
+      railsAreVisuallyConnected(expanded.rails),
+      `Expected expanded rails to draw as one connected group rail: ${JSON.stringify(expanded.rails)}`
+    )
+
+    await openNativeGroupMenu(driver)
+    await setSidebarPrompt(driver, RENAMED_GROUP_TITLE)
+    await pickContextMenuOption(driver, 'Edit title')
+
+    const renamed = await waitFor(async () => {
+      const snapshot = await getNativeGroupSnapshot(driver, RENAMED_GROUP_TITLE)
+      if (
+        snapshot.group?.collapsed === 'false' &&
+        snapshot.group.text.includes(RENAMED_GROUP_TITLE) &&
+        snapshot.rails.length === 4
+      ) {
+        return snapshot
+      }
+    }, 'native group edit-title update')
+
+    assert.equal(
+      renamed.editingTabs.length,
+      0,
+      `Native group Edit title should not put the first tab into title-edit mode: ${JSON.stringify(renamed.editingTabs)}`
+    )
+    assert.equal(
+      renamed.customTitleInputCount,
+      0,
+      'Native group Edit title should not render a tab custom-title input'
+    )
+
+    await openNativeGroupMenu(driver, RENAMED_GROUP_TITLE)
+    await pickNativeGroupColor(driver, 'Purple')
+
+    const recolored = await waitFor(async () => {
+      const snapshot = await getNativeGroupSnapshot(driver, RENAMED_GROUP_TITLE)
+      if (
+        snapshot.group?.collapsed === 'false' &&
+        snapshot.group.color === PURPLE &&
+        snapshot.rails.length === 4 &&
+        snapshot.rails.every(rail => rail.color === PURPLE_RGB)
+      ) {
+        return snapshot
+      }
+    }, 'native group color picker update')
+
+    assert.notEqual(
+      recolored.group.color,
+      BLUE,
+      'Native group color picker should update the group header color, not only tab custom colors'
+    )
+    assert.ok(
+      railsAreVisuallyConnected(recolored.rails),
+      `Expected recolored rails to remain connected: ${JSON.stringify(recolored.rails)}`
+    )
 
     const collapsedUpdate = await runExtensionAsync(
       driver,
@@ -127,7 +185,7 @@ test(
     assert.equal(collapsedUpdate, true)
 
     const collapsed = await waitFor(async () => {
-      const snapshot = await getNativeGroupSnapshot(driver)
+      const snapshot = await getNativeGroupSnapshot(driver, RENAMED_GROUP_TITLE)
       if (
         snapshot.group?.collapsed === 'true' &&
         snapshot.group.color === ORANGE &&
@@ -279,7 +337,7 @@ async function runExtensionAsync(driver, fn, ...args) {
   return result?.value
 }
 
-async function getNativeGroupSnapshot(driver) {
+async function getNativeGroupSnapshot(driver, title = TEST_GROUP_TITLE) {
   return await driver.executeScript(
     `
       const group = [...document.querySelectorAll('.NativeTabGroup')]
@@ -295,12 +353,18 @@ async function getNativeGroupSnapshot(driver) {
           text: group.textContent,
           titleColor: getComputedStyle(group.querySelector('.title')).color,
         },
+        customTitleInputCount: document.querySelectorAll('.Tab .custom-title-input').length,
+        editingTabs: [...document.querySelectorAll('.Tab[data-edit="true"]')].map(el => ({
+          id: el.id.replace(/^tab/, ''),
+          text: el.textContent,
+        })),
         rails: railEls.map(el => {
           const rect = el.getBoundingClientRect();
           return {
             collapsed: el.dataset.collapsed === 'true',
             color: getComputedStyle(el).backgroundColor,
             end: el.dataset.end === 'true',
+            bottom: rect.bottom,
             height: rect.height,
             left: rect.left,
             middle: el.dataset.middle === 'true',
@@ -317,7 +381,7 @@ async function getNativeGroupSnapshot(driver) {
         })),
       };
     `,
-    TEST_GROUP_TITLE
+    title
   )
 }
 
@@ -328,6 +392,84 @@ function railsAreVerticallyUsable(rails) {
 function railsShareLeftEdge(rails) {
   const leftEdges = rails.map(rail => rail.left)
   return Math.max(...leftEdges) - Math.min(...leftEdges) <= 0.5
+}
+
+function railsAreVisuallyConnected(rails) {
+  return rails
+    .slice()
+    .sort((a, b) => a.top - b.top)
+    .every((rail, index, sortedRails) => {
+      const nextRail = sortedRails[index + 1]
+      return !nextRail || rail.bottom >= nextRail.top - 2.5
+    })
+}
+
+async function openNativeGroupMenu(driver, title = TEST_GROUP_TITLE) {
+  await driver.executeScript(
+    `
+      const group = [...document.querySelectorAll('.NativeTabGroup')]
+        .find(el => el.textContent.includes(arguments[0]));
+      if (!group) throw new Error('Native group header not found');
+
+      const rect = group.getBoundingClientRect();
+      const init = {
+        bubbles: true,
+        button: 2,
+        buttons: 2,
+        cancelable: true,
+        clientX: rect.left + 12,
+        clientY: rect.top + rect.height / 2,
+        view: window,
+      };
+      group.dispatchEvent(new MouseEvent('mousedown', init));
+      group.dispatchEvent(new MouseEvent('mouseup', init));
+    `,
+    title
+  )
+
+  await waitFor(async () => {
+    return await driver.executeScript(
+      `return document.querySelector('.CtxMenu[data-active="true"] .icon-opt[title="Purple"]') !== null`
+    )
+  }, 'native group color picker menu')
+}
+
+async function pickNativeGroupColor(driver, label) {
+  await pickContextMenuOption(driver, label)
+}
+
+async function setSidebarPrompt(driver, value) {
+  await driver.executeScript(
+    `
+      window.__sideberyE2EPromptValue = arguments[0];
+      window.prompt = () => window.__sideberyE2EPromptValue;
+    `,
+    value
+  )
+}
+
+async function pickContextMenuOption(driver, label) {
+  await driver.executeScript(
+    `
+      const option = [...document.querySelectorAll('.CtxMenu[data-active="true"] .opt, .CtxMenu[data-active="true"] .icon-opt')]
+        .find(el => el.title === arguments[0]);
+      if (!option) throw new Error('Context menu option not found: ' + arguments[0]);
+
+      const rect = option.getBoundingClientRect();
+      const init = {
+        bubbles: true,
+        button: 0,
+        buttons: 1,
+        cancelable: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2,
+        view: window,
+      };
+      option.dispatchEvent(new MouseEvent('mousedown', init));
+      option.dispatchEvent(new MouseEvent('mouseup', init));
+    `,
+    label
+  )
 }
 
 async function waitFor(fn, label, timeout = 20000) {

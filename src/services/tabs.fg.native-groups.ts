@@ -298,21 +298,50 @@ export async function toggleNativeGroupCollapsed(groupId: ID): Promise<void> {
   const group = getNativeGroup(groupId)
   if (!group) return
 
-  await browser.tabGroups.update(groupId, { collapsed: !group.collapsed }).catch(err => {
-    Logs.err('Tabs.toggleNativeGroupCollapsed: Cannot update group:', err)
-  })
+  const updatedGroup = await browser.tabGroups
+    .update(groupId, { collapsed: !group.collapsed })
+    .catch(err => {
+      Logs.err('Tabs.toggleNativeGroupCollapsed: Cannot update group:', err)
+    })
+  if (updatedGroup) setGroup(updatedGroup)
+}
+
+export async function setNativeGroupTitle(groupId: ID, title: string): Promise<void> {
+  const group = getNativeGroup(groupId)
+  if (!group) return
+
+  const updatedGroup = await browser.tabGroups
+    .update(groupId, { title: title.trim() })
+    .catch(err => {
+      Logs.err('Tabs.setNativeGroupTitle: Cannot rename group:', err)
+    })
+  if (updatedGroup) setGroup(updatedGroup)
 }
 
 export async function renameNativeGroup(groupId: ID): Promise<void> {
   const group = getNativeGroup(groupId)
   if (!group) return
 
-  const title = window.prompt(browser.i18n.getMessage('editBookmarkTitle') || 'Title', group.title)
+  const title = window.prompt(
+    browser.i18n.getMessage?.('editBookmarkTitle') || 'Title',
+    group.title
+  )
   if (title === null) return
 
-  await browser.tabGroups.update(groupId, { title: title.trim() }).catch(err => {
-    Logs.err('Tabs.renameNativeGroup: Cannot rename group:', err)
+  await setNativeGroupTitle(groupId, title)
+}
+
+export async function setNativeGroupColor(
+  groupId: ID,
+  color: browser.tabGroups.Color
+): Promise<void> {
+  const group = getNativeGroup(groupId)
+  if (!group) return
+
+  const updatedGroup = await browser.tabGroups.update(groupId, { color }).catch(err => {
+    Logs.err('Tabs.setNativeGroupColor: Cannot set group color:', err)
   })
+  if (updatedGroup) setGroup(updatedGroup)
 }
 
 export async function ungroupNativeGroup(groupId: ID): Promise<void> {

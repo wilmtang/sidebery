@@ -19,6 +19,7 @@
 <script lang="ts" setup>
 import { computed } from 'vue'
 import { MenuType } from 'src/enums'
+import type { Tab } from 'src/types'
 import { translate } from 'src/dict'
 import * as Tabs from 'src/services/tabs.fg'
 import * as Menu from 'src/services/menu.fg'
@@ -47,10 +48,8 @@ function onMouseDown(e: MouseEvent): void {
     Menu.close()
     return
   }
-  if (e.button === 0 || e.button === 2) {
-    Selection.resetSelection()
-    Tabs.reactive.nativeGroupsSelectedId = props.groupId
-  }
+  if (e.button === 0) selectNativeGroupHeader()
+  if (e.button === 2) selectNativeGroupTabs()
 }
 
 function onMouseUp(e: MouseEvent): void {
@@ -66,16 +65,29 @@ function onMouseUp(e: MouseEvent): void {
 }
 
 function onCtxMenu(e: MouseEvent): void {
-  if (!e.ctrlKey && !e.shiftKey) {
-    Selection.resetSelection()
-    Tabs.reactive.nativeGroupsSelectedId = props.groupId
-  }
+  const firstTab = selectNativeGroupTabs()
 
   if (Settings.state.ctxMenuNative) {
-    browser.menus.overrideContext({ showDefaults: false })
+    if (firstTab) browser.menus.overrideContext({ context: 'tab', tabId: firstTab.id })
+    else browser.menus.overrideContext({ showDefaults: false })
     Menu.open(MenuType.NativeTabGroup)
   } else {
     e.preventDefault()
   }
+}
+
+function selectNativeGroupHeader(): void {
+  Selection.resetSelection()
+  Tabs.reactive.nativeGroupsSelectedId = props.groupId
+}
+
+function selectNativeGroupTabs(): Tab | undefined {
+  const groupTabs = Tabs.getNativeGroupTabs(props.groupId, true)
+
+  Selection.resetSelection()
+  Tabs.reactive.nativeGroupsSelectedId = props.groupId
+  if (groupTabs.length) Selection.selectTabs(groupTabs.map(tab => tab.id))
+
+  return groupTabs[0]
 }
 </script>

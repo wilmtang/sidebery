@@ -205,6 +205,8 @@ export const tabsMenuOptions: Record<string, () => MenuOption | MenuOption[] | u
   },
 
   urlConf: () => {
+    if (Tabs.getNativeGroup(Tabs.reactive.nativeGroupsSelectedId)) return
+
     const selected = Selection.ids()
     const firstTab = Tabs.byId[selected[0]]
     if (!firstTab) return
@@ -360,6 +362,27 @@ export const tabsMenuOptions: Record<string, () => MenuOption | MenuOption[] | u
     if (!group) option.inactive = true
     if (!Settings.state.ctxMenuRenderInact && option.inactive) return
     return option
+  },
+
+  colorizeNativeTabGroup: () => {
+    const opts: MenuOption[] = []
+    const groupId = Tabs.reactive.nativeGroupsSelectedId
+    const group = Tabs.getNativeGroup(groupId)
+    if (!group) return
+
+    const usedColor = Tabs.normalizeNativeGroupColor(group.color)
+    for (const color of D.NATIVE_GROUP_COLOR_OPTS) {
+      if (usedColor === color.color) continue
+      const title = translate('colors.' + color.color)
+      opts.push({
+        label: title,
+        color: color.color,
+        icon: 'circle',
+        onClick: () => Tabs.setNativeGroupColor(groupId, color.value),
+      })
+    }
+
+    if (opts.length) return opts
   },
 
   ungroupNativeTabGroup: () => {
@@ -565,6 +588,15 @@ export const tabsMenuOptions: Record<string, () => MenuOption | MenuOption[] | u
   },
 
   editTabTitle: () => {
+    const nativeGroup = Tabs.getNativeGroup(Tabs.reactive.nativeGroupsSelectedId)
+    if (nativeGroup) {
+      return {
+        label: translate('menu.tab.edit_title'),
+        icon: 'icon_edit',
+        onClick: () => Tabs.renameNativeGroup(nativeGroup.id),
+      }
+    }
+
     const selected = Selection.ids()
     const firstTab = Tabs.byId[selected[0]]
     if (!firstTab) return
