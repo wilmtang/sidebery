@@ -190,10 +190,18 @@ export async function createWithTabs(
     })
   }
 
-  try {
-    await browser.tabs.remove(initialTabId)
-  } catch (err) {
-    Logs.err('Windows.createWithTabs: Cannot remove initial tab:', err)
+  // Only remove the initial blank tab if at least one replacement tab was
+  // actually created/moved — otherwise removing it would leave the window
+  // empty and Firefox would close it (L4).
+  const processedOk = processedTabs.some(t => t)
+  if (processedOk) {
+    try {
+      await browser.tabs.remove(initialTabId)
+    } catch (err) {
+      Logs.err('Windows.createWithTabs: Cannot remove initial tab:', err)
+    }
+  } else {
+    Logs.warn('Windows.createWithTabs: No tabs created/moved, keeping initial tab')
   }
 
   lockedWindowsTabs[window.id] = { move: moveTabs, cache }
@@ -253,6 +261,9 @@ function onWindowRemoved(windowId: ID): void {
 
   byId.delete(windowId)
   delete Tabs.cacheByWin[windowId]
+  // Drop any tabs-lock entry for the gone window so it doesn't linger forever
+  // (e.g. when the window closes before createWithTabs consumes the lock).
+  delete lockedWindowsTabs[windowId]
 
   if (window.tabs) {
     for (const tab of window.tabs) {
@@ -280,6 +291,11 @@ function onWindowFocused(windowId: ID): void {
     if (window) {
       lastFocusedId = windowId
       focusedId = windowId
+      // Firefox doesn't guarantee a -1 (unfocused) event between consecutive
+      // focus switches, so clear the flag on any other window that still has it.
+      for (const [id, w] of byId) {
+        if (w?.focused && id !== windowId) w.focused = false
+      }
       window.focused = true
     }
 

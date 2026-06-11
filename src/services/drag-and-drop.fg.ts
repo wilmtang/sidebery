@@ -516,7 +516,7 @@ export function onDragEnter(e: DragEvent): void {
       const leftOffset = panel?.leftOffset ?? 0
       DnD.start({
         x: (Sidebar.width >> 1) + leftOffset,
-        y: e.clientX,
+        y: e.clientY,
         type: E.DragType.Native,
         panelId: D.NOID,
         windowId: D.NOID,

@@ -227,7 +227,7 @@ export function selectTabsRange(aTab: Tab, bTab?: Tab): void {
 
   // Expand range to include folded tabs
   const lastTab = Tabs.list[maxIndex]
-  if (lastTab.isParent && lastTab.folded) {
+  if (lastTab?.isParent && lastTab.folded) {
     maxIndex += Tabs.getBranchLen(lastTab.id) ?? 0
   }
 
@@ -248,6 +248,7 @@ export function selectTabsRange(aTab: Tab, bTab?: Tab): void {
   else {
     for (let i = minIndex; i <= maxIndex; i++) {
       const target = Tabs.list[i]
+      if (!target) continue
 
       target.reactive.sel = target.sel = true
       normal.push(target.id)

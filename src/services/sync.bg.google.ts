@@ -451,7 +451,7 @@ export async function loadSyncedEntries(): Promise<SyncedEntry[] | null> {
     }
 
     if (withError) {
-      IPC.sidebars('notify', {
+      IPC.sendToSidebars('notify', {
         icon: '#icon_sync',
         lvl: 'err',
         title: translate('sync.err.google_tabs'),

@@ -159,9 +159,6 @@ function onTitleChange(e: DOMEvent<Event, HTMLInputElement>): void {
  * Handle group page update msg
  */
 export function onGroupUpdMsg(upd: T.GroupUpdMsg) {
-  if (!newTabEl) return
-
-  let i
   if (upd.parentId !== undefined) groupParentId = upd.parentId
   if (upd.title !== undefined) {
     const normTitle = upd.title.trim()
@@ -175,14 +172,18 @@ export function onGroupUpdMsg(upd: T.GroupUpdMsg) {
     Logs.setWinId(groupWinId)
   }
 
-  if (upd.tabs !== undefined) {
+  // Tab DOM updates need the "+new tab" anchor element; only this part is gated
+  // on newTabEl (was previously an early return that dropped title/window/pin).
+  if (upd.tabs !== undefined && newTabEl) {
+    const anchorEl = newTabEl
+    let i
     for (i = 0; i < upd.tabs.length; i++) {
       const newTab = upd.tabs[i]
       const oldTab = tabs[i]
       if (!oldTab) {
         createTabEl(newTab, (event: MouseEvent) => onTabClick(event, newTab))
         if (newTab.el) {
-          newTabEl.before(newTab.el)
+          anchorEl.before(newTab.el)
           tabs[i] = newTab
         }
       } else {
@@ -190,11 +191,10 @@ export function onGroupUpdMsg(upd: T.GroupUpdMsg) {
       }
     }
 
-    for (; i < tabs.length; i++) {
-      const tab = tabs[i]
-      tab.el?.remove()
-      tabs.splice(i, 1)
-    }
+    // Remove all now-absent trailing tabs in one splice (mutating while
+    // incrementing previously skipped every other element).
+    const removed = tabs.splice(i)
+    for (const tab of removed) tab.el?.remove()
   }
 
   if (upd.pin) {

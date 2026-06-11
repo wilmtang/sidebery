@@ -2,6 +2,126 @@ import { describe, expect, test } from 'vitest'
 import * as Utils from './utils'
 import { PLACEHOLDER_URL } from 'src/defaults'
 
+describe('Utils.AsyncQueue', () => {
+  test('runs sequential tasks in order', async () => {
+    const queue = new Utils.AsyncQueue()
+    const order: number[] = []
+    const mk = (n: number) => async () => {
+      await Promise.resolve()
+      order.push(n)
+      return n
+    }
+    const results = await Promise.all([queue.add(mk(1)), queue.add(mk(2)), queue.add(mk(3))])
+    expect(results).toEqual([1, 2, 3])
+    expect(order).toEqual([1, 2, 3])
+  })
+
+  test('does not deadlock when the first (fast-path) task rejects', async () => {
+    const queue = new Utils.AsyncQueue()
+    const failing = async () => {
+      throw new Error('boom')
+    }
+    const ok = async () => 'ok'
+
+    // First task rejects on the fast path; its rejection must propagate.
+    await expect(queue.add(failing)).rejects.toThrow('boom')
+
+    // Queue must still be usable afterwards.
+    await expect(queue.add(ok)).resolves.toBe('ok')
+  })
+
+  test('a rejected queued task does not block later tasks', async () => {
+    const queue = new Utils.AsyncQueue()
+    const slowOk = async () => {
+      await Utils.sleep(5)
+      return 'first'
+    }
+    const failing = async () => {
+      throw new Error('mid')
+    }
+    const lastOk = async () => 'last'
+
+    const p1 = queue.add(slowOk)
+    const p2 = queue.add(failing)
+    const p3 = queue.add(lastOk)
+
+    await expect(p1).resolves.toBe('first')
+    await expect(p2).rejects.toThrow('mid')
+    await expect(p3).resolves.toBe('last')
+  })
+
+  test('preserves rejection to the caller while keeping the queue alive', async () => {
+    const queue = new Utils.AsyncQueue()
+    const results: string[] = []
+    await queue
+      .add(async () => {
+        throw new Error('x')
+      })
+      .catch(() => results.push('caught'))
+    await queue.add(async () => {
+      results.push('after')
+    })
+    expect(results).toEqual(['caught', 'after'])
+  })
+})
+
+describe('Utils.toRGBA()', () => {
+  test('percentage channels convert independently', () => {
+    // Regression: green/blue percent channels previously reused the red value.
+    expect(Utils.toRGBA('rgba(100%, 50%, 0%, 0.5)')).toEqual([255, 128, 0, 0.5])
+    expect(Utils.toRGBA('rgb(0%, 100%, 50%)')).toEqual([0, 255, 128, 1])
+  })
+  test('numeric channels', () => {
+    expect(Utils.toRGBA('rgb(10, 20, 30)')).toEqual([10, 20, 30, 1])
+    expect(Utils.toRGBA('rgba(10, 20, 30, 0.25)')).toEqual([10, 20, 30, 0.25])
+  })
+  test('valid hex', () => {
+    expect(Utils.toRGBA('#fff')).toEqual([255, 255, 255, 1])
+    expect(Utils.toRGBA('#010203')).toEqual([1, 2, 3, 1])
+  })
+  test('rejects malformed hex (no partial parse)', () => {
+    // Regression: `[0-f]` accepted garbage like `#1G2H3I` and parsed it partially.
+    expect(Utils.toRGBA('#1G2H3I')).toBe(undefined)
+    expect(Utils.toRGBA('#zzz')).toBe(undefined)
+  })
+})
+
+describe('Utils.isRegExp()', () => {
+  test('true for RegExp', () => {
+    expect(Utils.isRegExp(/abc/)).toBe(true)
+  })
+  test('false (no throw) for null/undefined/string', () => {
+    expect(Utils.isRegExp(null)).toBe(false)
+    expect(Utils.isRegExp(undefined)).toBe(false)
+    expect(Utils.isRegExp('abc')).toBe(false)
+    expect(Utils.isRegExp({ test: () => true })).toBe(false)
+  })
+})
+
+describe('Utils.withoutEmptyFolders()', () => {
+  test('keeps ancestor folders even when children precede parents', () => {
+    // child-first ordering used to misclassify the parent folder as empty
+    const items = [
+      { id: 3, url: 'https://example.com', parentId: 2 },
+      { id: 2, parentId: 1 },
+      { id: 1, parentId: -1 },
+      { id: 4, parentId: 1 }, // empty folder -> dropped
+    ]
+    const result = Utils.withoutEmptyFolders(items).map(i => i.id)
+    expect(result).toEqual([3, 2, 1])
+  })
+})
+
+describe('Utils.colorFromString()', () => {
+  test('deterministic and includes trailing char of odd-length strings', () => {
+    const a = Utils.colorFromString('abcde')
+    const b = Utils.colorFromString('abcde')
+    expect(a).toBe(b)
+    // changing only the trailing (previously ignored) char changes the color
+    expect(Utils.colorFromString('abcde')).not.toBe(Utils.colorFromString('abcdf'))
+  })
+})
+
 describe('Utils.createGroupUrl()', () => {
   test('just name', () => {
     const url = Utils.createGroupUrl('name')

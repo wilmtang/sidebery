@@ -27,7 +27,9 @@ export async function saveSettings(): Promise<void> {
   await Store.set({ settings })
 
   if (settings.syncSaveSettings) {
-    Sync.save(Sync.SyncedEntryType.Settings, settings)
+    Sync.save(Sync.SyncedEntryType.Settings, settings).catch(err => {
+      Logs.err('Settings.saveSettings: Cannot sync-save settings:', err)
+    })
   }
 }
 

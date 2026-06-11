@@ -17,7 +17,18 @@ export let containersProxies: Record<string, browser.proxy.ProxyInfo> = {}
 
 const BG_URL = browser.runtime.getURL('bg/background.html')
 
-let handledReqId: string | undefined
+// Bounded set of recently handled request ids. A single string let interleaved
+// main_frame requests from different tabs overwrite each other's dedup marker,
+// so a redirect of one request could be re-processed (double reopen attempt).
+const HANDLED_REQ_IDS_LIMIT = 100
+const handledReqIds = new Set<string>()
+function markReqHandled(reqId: string): void {
+  handledReqIds.add(reqId)
+  if (handledReqIds.size > HANDLED_REQ_IDS_LIMIT) {
+    const oldest = handledReqIds.values().next().value
+    if (oldest !== undefined) handledReqIds.delete(oldest)
+  }
+}
 let includeHostsRules: IncludeRule[] = []
 let excludeHostsRules: Record<ID, (RegExp | string)[]> = {}
 let proxyAuthCredentials: Record<string, browser.webRequest.AuthCredentials> = {}
@@ -98,7 +109,14 @@ async function checkIpInfoWithEXTREME_IP_LOOKUP_COM(
   return result
 }
 
+// Serialize IP checks: each sets the module-level `ipCheckCtx` and then fetches
+// through that container's proxy. Two concurrent checks for different containers
+// would clobber `ipCheckCtx` and route one check through the wrong proxy.
+const IP_CHECK_QUEUE = new Utils.AsyncQueue()
 export async function checkIpInfo(cookieStoreId: ID): Promise<IPCheckResult | null> {
+  return IP_CHECK_QUEUE.add(_checkIpInfo, cookieStoreId)
+}
+async function _checkIpInfo(cookieStoreId: ID): Promise<IPCheckResult | null> {
   let result: IPCheckResult | null
 
   result = await checkIpInfoWithEXTREME_IP_LOOKUP_COM(cookieStoreId)
@@ -239,10 +257,10 @@ function proxyReqHandler(info: browser.proxy.RequestDetails): browser.proxy.Prox
     tab &&
     !tab.preventAutoReopening &&
     info.type === 'main_frame' &&
-    handledReqId !== info.requestId &&
+    !handledReqIds.has(info.requestId) &&
     (!disableReopeningForContainer || disableReopeningForContainer !== info.cookieStoreId)
   ) {
-    handledReqId = info.requestId
+    markReqHandled(info.requestId)
     let includedUrl
 
     // Include rules
@@ -260,7 +278,12 @@ function proxyReqHandler(info: browser.proxy.RequestDetails): browser.proxy.Prox
         }
 
         incHistory[rule.ctx] = info.url
-        return Utils.GLOBAL_QUEUE.add(Tabs.reopenTab, tab, info.url, rule.ctx)
+        return Utils.GLOBAL_QUEUE.add(Tabs.reopenTab, tab, info.url, rule.ctx).catch(
+          (err): browser.proxy.ProxyInfo => {
+            Logs.err('proxyReqHandler: Cannot reopen tab (include rule):', err)
+            return { type: 'direct' }
+          }
+        )
       }
     }
 
@@ -273,7 +296,12 @@ function proxyReqHandler(info: browser.proxy.RequestDetails): browser.proxy.Prox
 
         if (ok) {
           incHistory['firefox-default'] = info.url
-          return Utils.GLOBAL_QUEUE.add(Tabs.reopenTab, tab, info.url)
+          return Utils.GLOBAL_QUEUE.add(Tabs.reopenTab, tab, info.url).catch(
+            (err): browser.proxy.ProxyInfo => {
+              Logs.err('proxyReqHandler: Cannot reopen tab (exclude rule):', err)
+              return { type: 'direct' }
+            }
+          )
         }
       }
     }

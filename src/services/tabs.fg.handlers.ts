@@ -104,6 +104,7 @@ function releaseReopenedTabsBuffer(): void {
 
   Tabs.deferredEventHandling.forEach(cb => cb())
   Tabs.clearDeferredEventHandling()
+  bufferedActivationHandler = null
 }
 
 const SESSION_RESTORE_MIN_TABS_COUNT = 2
@@ -1648,7 +1649,10 @@ async function onTabAttached(id: ID, info: browser.tabs.AttachInfo): Promise<voi
   deferredActivationHandling.id = D.NOID
 }
 
-let bufTabActivatedEventIndex = -1
+// Tracked by reference (not by cached index): if deferredEventHandling is
+// cleared/replayed elsewhere, indexOf returns -1 and we never splice out an
+// unrelated deferred handler by a stale index.
+let bufferedActivationHandler: (() => void) | null = null
 
 /**
  * Tabs.onActivated
@@ -1656,13 +1660,16 @@ let bufTabActivatedEventIndex = -1
 function onTabActivated(info: browser.tabs.ActiveInfo): void {
   if (info.windowId !== Windows.id) return
   if (!Tabs.ready || waitForOtherReopenedTabsBuffer) {
-    if (bufTabActivatedEventIndex !== -1) {
-      Tabs.deferredEventHandling.splice(bufTabActivatedEventIndex, 1)
+    // Keep only the latest activation buffered.
+    if (bufferedActivationHandler) {
+      const idx = Tabs.deferredEventHandling.indexOf(bufferedActivationHandler)
+      if (idx !== -1) Tabs.deferredEventHandling.splice(idx, 1)
     }
-    bufTabActivatedEventIndex = Tabs.deferredEventHandling.push(() => onTabActivated(info)) - 1
+    bufferedActivationHandler = () => onTabActivated(info)
+    Tabs.deferredEventHandling.push(bufferedActivationHandler)
     return
   }
-  bufTabActivatedEventIndex = -1
+  bufferedActivationHandler = null
   if (Tabs.ignoreTabsEvents) return
   if (maybeRestoredTabsDataQuerying) return
   if (Tabs.tabsReinitializing) return Tabs.reinitTabs()

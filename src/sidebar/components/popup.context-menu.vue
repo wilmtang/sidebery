@@ -231,7 +231,9 @@ function onMouseUp(e: MouseEvent, opt: T.MenuOption): void {
 
 const scrollConf: ScrollToOptions = { behavior: 'smooth', top: 0 }
 function scrollToOption(opt: T.MenuOption) {
-  const query = `.opt[title="${opt.tooltip ?? opt.label}"]`
+  // CSS.escape the (user-facing) value so quotes/special chars in a label or
+  // tooltip can't break the selector.
+  const query = `.opt[title=${CSS.escape(opt.tooltip ?? opt.label ?? '')}]`
   const optEl = document.querySelector(query) as HTMLElement | null
   if (!optEl) return
 

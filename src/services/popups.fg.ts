@@ -102,6 +102,7 @@ export function ask(conf: T.DialogConfig): Promise<string | null> {
     reactive.dialog = {
       title: conf.title,
       note: conf.note,
+      input: conf.input,
       checkbox: conf.checkbox,
       buttons: conf.buttons,
       buttonsCentered: conf.buttonsCentered,

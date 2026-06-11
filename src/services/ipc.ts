@@ -48,13 +48,26 @@ export interface ConnectionInfo {
   remotePort?: browser.runtime.Port
   disconnectListener?: (port: browser.runtime.Port) => void
   postListener?: <T extends InstanceType, A extends keyof Actions>(msg: Message<T, A>) => void
+  /**
+   * Pending connection-confirmation waiter for THIS connection attempt.
+   * Kept per-connection (not in the shared msgsWaitingForAnswer map) so that
+   * concurrent connectTo() calls from one context don't clobber each other.
+   */
+  conConfirmTimeout?: number
+  conConfirmResolve?: () => void
 }
 
 interface MsgWaitingForAnswer {
   timeout: number
   ok?: (v?: any) => void
   err?: (err?: any) => void
-  portName: string
+  /**
+   * The actual local Port the request was sent on. Matched by identity (not by
+   * name) on disconnect: port names are deterministic per src/dst pair and thus
+   * identical across reconnects, so name-matching would reject in-flight
+   * requests belonging to a freshly reconnected port.
+   */
+  port?: browser.runtime.Port
 }
 
 const MSG_CONFIRM_DEADLINE = 60_000
@@ -127,6 +140,14 @@ export function getConnection(type: InstanceType, id: ID): ConnectionInfo | unde
 
 function removeConnection(type: InstanceType, id: ID) {
   // Logs.info('IPC.REMOVE:', getInstanceName(type), id)
+  // Clear any pending connection-confirmation timer so it can't fire on a
+  // connection that's being torn down.
+  const existing = getConnection(type, id)
+  if (existing?.conConfirmTimeout !== undefined) {
+    clearTimeout(existing.conConfirmTimeout)
+    existing.conConfirmTimeout = undefined
+    existing.conConfirmResolve = undefined
+  }
   if (type === InstanceType.bg) state.bgConnection = undefined
   else if (type === InstanceType.sidebar) state.sidebarConnections.delete(id)
   else if (type === InstanceType.setup) state.setupPageConnections.delete(id)
@@ -223,8 +244,6 @@ export function connectTo(
     connection.state = ConnectionState.Connecting
   }
 
-  const conConfirmId = toBg ? -1 : -2
-
   if (connection.localPort) connection.localPort.disconnect()
   connection.localPort = browser.runtime.connect({ name: portNameJson })
 
@@ -232,7 +251,7 @@ export function connectTo(
   connection.postListener = <T extends InstanceType, A extends keyof Actions>(
     msg: Message<T, A>
   ) => {
-    onPostMsg(msg, connection.localPort)
+    onPostMsg(msg, connection.localPort, connection)
   }
   connection.localPort.onMessage.addListener(connection.postListener)
 
@@ -261,10 +280,10 @@ export function connectTo(
       connection.reconnectingTimeout = setTimeout(() => connectTo(dstType, dstWinId), timeout)
 
       // Clear confirmation timeout of the previous connection attempt
-      const confirmWaiting = msgsWaitingForAnswer.get(conConfirmId)
-      if (confirmWaiting) {
-        clearTimeout(confirmWaiting.timeout)
-        msgsWaitingForAnswer.delete(conConfirmId)
+      if (connection.conConfirmTimeout !== undefined) {
+        clearTimeout(connection.conConfirmTimeout)
+        connection.conConfirmTimeout = undefined
+        connection.conConfirmResolve = undefined
       }
     }
 
@@ -293,7 +312,8 @@ export function connectTo(
   const timeout = setTimeout(() => {
     Logs.info(`${dbgPrefix} No confirmation for ${conConfirmTimeout}ms`)
 
-    msgsWaitingForAnswer.delete(conConfirmId)
+    connection.conConfirmTimeout = undefined
+    connection.conConfirmResolve = undefined
 
     connection.state = ConnectionState.Closed
 
@@ -311,24 +331,21 @@ export function connectTo(
     }
   }, conConfirmTimeout)
 
-  msgsWaitingForAnswer.set(conConfirmId, {
-    timeout,
-    portName: '',
-    ok: () => {
-      // Logs.info(`IPC.connectTo(${getInstanceName(dstType)}): CONFIRMED`)
-      connection.state = ConnectionState.Ready
-      if (connectionIsNew) {
-        const handlers = connectionHandlers.get(dstType)
-        if (handlers) handlers.forEach(cb => cb(connection.id))
-        triggerConnectionAwaiters(dstType, connection.id)
-      }
-      if (connection.pendingRequests.length) {
-        const pending = connection.pendingRequests
-        connection.pendingRequests = []
-        pending.forEach(pending => pending.request())
-      }
-    },
-  })
+  connection.conConfirmTimeout = timeout
+  connection.conConfirmResolve = () => {
+    // Logs.info(`IPC.connectTo(${getInstanceName(dstType)}): CONFIRMED`)
+    connection.state = ConnectionState.Ready
+    if (connectionIsNew) {
+      const handlers = connectionHandlers.get(dstType)
+      if (handlers) handlers.forEach(cb => cb(connection.id))
+      triggerConnectionAwaiters(dstType, connection.id)
+    }
+    if (connection.pendingRequests.length) {
+      const pending = connection.pendingRequests
+      connection.pendingRequests = []
+      pending.forEach(pending => pending.request())
+    }
+  }
 
   return connection.localPort
 }
@@ -489,7 +506,7 @@ function getConnectionPortWithoutError(con?: ConnectionInfo) {
 }
 
 function getPortErrorMessage(con?: ConnectionInfo) {
-  const msg = con?.localPort?.error?.message ?? con?.localPort?.error?.message
+  const msg = con?.localPort?.error?.message ?? con?.remotePort?.error?.message
   return msg ? '\n  Port error: ' + msg : ''
 }
 
@@ -500,6 +517,44 @@ const enum AutoConnectMode {
 }
 const msgsWaitingForAnswer: Map<ID, MsgWaitingForAnswer> = new Map()
 let msgCounter = 1
+let uidCounter = 1
+
+// Receiver-side dedup of re-delivered messages (N11). Keyed by Message.uid.
+interface ProcessedMsgEntry {
+  done: boolean
+  result?: any
+  error?: any
+  // Answers owed to duplicate deliveries that arrived while the action was
+  // still running; each is answered (with the eventual result) on completion.
+  pendingAnswers: { id: ID; port: browser.runtime.Port }[]
+  cleanupTimeout?: number
+}
+const processedMsgs = new Map<string, ProcessedMsgEntry>()
+// Must outlive the retry deadline so a resend still finds the cached result.
+const PROCESSED_MSG_TTL = MSG_CONFIRM_DEADLINE * 2
+
+function finalizeProcessedMsg(uid: string | undefined, result: any, error: any): void {
+  if (uid === undefined) return
+  const entry = processedMsgs.get(uid)
+  if (!entry) return
+
+  entry.done = true
+  entry.result = result
+  entry.error = error
+
+  // Answer duplicate deliveries that queued while the action was running.
+  for (const pending of entry.pendingAnswers) {
+    try {
+      pending.port.postMessage({ id: pending.id, result, error })
+    } catch {
+      /* port may be dead */
+    }
+  }
+  entry.pendingAnswers = []
+
+  clearTimeout(entry.cleanupTimeout)
+  entry.cleanupTimeout = setTimeout(() => processedMsgs.delete(uid), PROCESSED_MSG_TTL)
+}
 /**
  * Send message using port.postMessage and wait for answer
  */
@@ -577,6 +632,12 @@ export async function request<T extends InstanceType, A extends ActionsKeys<T>>(
     const msgId = msgCounter++
     msg.id = msgId
 
+    // Assign a retry-stable uid once (kept across resends because the retry
+    // re-sends this same `msg` object). Lets the receiver dedupe re-deliveries.
+    if (msg.uid === undefined) {
+      msg.uid = `${_localType}:${_localWinId}:${_localTabId}:${uidCounter++}`
+    }
+
     // Send the message
     try {
       port.postMessage(msg)
@@ -626,7 +687,7 @@ export async function request<T extends InstanceType, A extends ActionsKeys<T>>(
       }
     }, MSG_CONFIRM_DEADLINE)
 
-    msgsWaitingForAnswer.set(msgId, { timeout, ok, err, portName: port.name })
+    msgsWaitingForAnswer.set(msgId, { timeout, ok, err, port })
   })
 }
 
@@ -651,6 +712,10 @@ function onConnect(port: browser.runtime.Port) {
   }
   if (portNameData.dstType !== _localType) return
   if (portNameData.dstWinId !== undefined && portNameData.dstWinId !== _localWinId) return
+  // runtime.onConnect fires in every extension context of the right type; a
+  // port aimed at a specific tab (setup/group page) must only be accepted by
+  // that exact tab, otherwise other same-type pages adopt it too.
+  if (portNameData.dstTabId !== undefined && portNameData.dstTabId !== _localTabId) return
 
   const srcType = portNameData.srcType
   const srcWinId = portNameData.srcWinId ?? NOID
@@ -830,29 +895,35 @@ export function runActionFor<T extends InstanceType, A extends keyof Actions>(
   if (msg.action !== undefined && actions) {
     const action = actions[msg.action] as AnyFunc
     if (action) {
-      if (msg.arg) return action(msg.arg)
+      if (msg.arg !== undefined) return action(msg.arg)
       else if (msg.args) return action(...msg.args)
       else return action()
     }
   }
 }
 
-const runningAsyncActions = new Map<string, string>()
+const runningAsyncActions = new Map<string, browser.runtime.Port>()
 /**
  * Handles message received from Port in background instance
  * and sends the answer message with the action result.
  */
 async function onPostMsg<T extends InstanceType, A extends keyof Actions>(
   msg: Message<T, A> | number,
-  port?: browser.runtime.Port
+  port?: browser.runtime.Port,
+  connection?: ConnectionInfo
 ): Promise<void> {
-  // Handle confirmation of connection
+  // Handle confirmation of connection.
+  // -1/-2 are connection-confirmation sentinels; the waiter lives on the
+  // connection whose localPort delivered this message (closure-provided), so
+  // concurrent connections never resolve each other. Other negatives (e.g. the
+  // -99 liveness probe) are intentionally ignored here.
   if ((msg as number) < 0) {
-    const waiting = msgsWaitingForAnswer.get(msg as number)
-    if (waiting) {
-      clearTimeout(waiting.timeout)
-      if (waiting.ok) waiting.ok()
-      msgsWaitingForAnswer.delete(-1)
+    if ((msg === -1 || msg === -2) && connection?.conConfirmResolve) {
+      if (connection.conConfirmTimeout !== undefined) clearTimeout(connection.conConfirmTimeout)
+      const resolve = connection.conConfirmResolve
+      connection.conConfirmTimeout = undefined
+      connection.conConfirmResolve = undefined
+      resolve()
     }
     return
   }
@@ -874,6 +945,34 @@ async function onPostMsg<T extends InstanceType, A extends keyof Actions>(
       msgsWaitingForAnswer.delete(msg.id)
     }
     return
+  }
+
+  // Dedupe re-delivered messages so non-idempotent actions never run twice.
+  // Only applies to answer-expecting action messages that carry a stable uid.
+  if (msg.uid !== undefined && msg.action && msg.id && port) {
+    const existing = processedMsgs.get(msg.uid)
+    if (existing) {
+      if (existing.done) {
+        // Already finished: answer this re-delivery with the cached result.
+        try {
+          port.postMessage({ id: msg.id, result: existing.result, error: existing.error })
+        } catch (err) {
+          Logs.err(`IPC.onPostMsg: Error re-sending cached result:`, err)
+        }
+      } else {
+        // Still running: queue this delivery's answer and confirm receipt so
+        // the initiator stops retrying; the original run will answer it.
+        existing.pendingAnswers.push({ id: msg.id, port })
+        try {
+          port.postMessage(msg.id)
+        } catch {
+          /* port may be dead */
+        }
+      }
+      return
+    }
+    // First delivery of this uid — mark in-flight before running the action.
+    processedMsgs.set(msg.uid, { done: false, pendingAnswers: [] })
   }
 
   // Run an action
@@ -902,11 +1001,15 @@ async function onPostMsg<T extends InstanceType, A extends keyof Actions>(
       let finalResult, error
       const asyncActionId = msgId + port.name
       try {
-        runningAsyncActions.set(asyncActionId, port.name)
+        runningAsyncActions.set(asyncActionId, port)
         finalResult = await result
       } catch (err) {
         error = String(err)
       }
+
+      // Cache the result for dedup (also answers any duplicate deliveries that
+      // queued while the action was running).
+      finalizeProcessedMsg(msg.uid, finalResult, error)
 
       // Check if result is not needed anymore
       if (!runningAsyncActions.has(asyncActionId)) return
@@ -919,6 +1022,7 @@ async function onPostMsg<T extends InstanceType, A extends keyof Actions>(
         return
       }
     } else {
+      finalizeProcessedMsg(msg.uid, result, error)
       try {
         port.postMessage({ id: msg.id, result, error })
       } catch (err) {
@@ -937,6 +1041,9 @@ function onSendMsg<T extends InstanceType, A extends keyof Actions>(msg: Message
   // Check if this instance is the correct destination
   if (msg.dstWinId !== undefined && msg.dstWinId !== _localWinId) return
   if (msg.dstType !== undefined && msg.dstType !== _localType) return
+  // A message targeted at a specific tab must not be handled by other tabs of
+  // the same instance type (runtime.sendMessage is delivered to all contexts).
+  if (msg.dstTabId !== undefined && msg.dstTabId !== _localTabId) return
 
   // Run an action
   let result
@@ -965,7 +1072,7 @@ function resolveUnfinishedCommunications(port: browser.runtime.Port) {
 
   // For initiator of the request
   for (const [msgId, waiting] of msgsWaitingForAnswer) {
-    if (waiting.portName === port.name) {
+    if (waiting.port === port) {
       clearTimeout(waiting.timeout)
       if (waiting.err) waiting.err('IPC: Target disconnected: ' + port.name)
       msgsWaitingForAnswer.delete(msgId)
@@ -973,8 +1080,8 @@ function resolveUnfinishedCommunications(port: browser.runtime.Port) {
   }
 
   // For the request handler
-  for (const [msgId, portName] of runningAsyncActions) {
-    if (portName === port.name) {
+  for (const [msgId, actionPort] of runningAsyncActions) {
+    if (actionPort === port) {
       runningAsyncActions.delete(msgId)
     }
   }

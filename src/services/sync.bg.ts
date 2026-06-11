@@ -199,6 +199,9 @@ export async function removeByType(type: Self.SyncedEntryType) {
       if (type === Self.SyncedEntryType.Keybindings) gdType = Self.Google.FileType.Keybindings
       if (gdType) await Self.Google.remove(gdType)
     }
+
+    // Keep the local cache in sync with what was just removed remotely.
+    entries = entries.filter(e => e.type !== type)
   })
 }
 
@@ -247,6 +250,22 @@ async function _getData<T>(entry: Self.SyncedEntry): Promise<T | null | void> {
 
 let onLoadHandlers: { ok: (v: Self.SyncedEntry[]) => void; err: (e: any) => void }[] = []
 
+// Resolve every load() caller that started waiting while `loading === true`.
+function resolveLoadHandlers(result: Self.SyncedEntry[]): void {
+  if (!onLoadHandlers.length) return
+  const handlers = onLoadHandlers
+  onLoadHandlers = []
+  handlers.forEach(h => h.ok(result))
+}
+
+// Reject every pending load() waiter (used when _load throws).
+function rejectLoadHandlers(err: any): void {
+  if (!onLoadHandlers.length) return
+  const handlers = onLoadHandlers
+  onLoadHandlers = []
+  handlers.forEach(h => h.err(err))
+}
+
 export async function load(forced?: boolean): Promise<Self.SyncedEntry[]> {
   Logs.info('Sync.load()')
 
@@ -266,79 +285,85 @@ export async function load(forced?: boolean): Promise<Self.SyncedEntry[]> {
 export async function _load(forced?: boolean): Promise<Self.SyncedEntry[]> {
   Logs.info('Sync._load()')
 
-  if (ready && !forced && entries.length) {
-    unloadAfter(Self.AUTO_UNLOAD_TIMEOUT_BG)
-    loading = false
-    return entries
-  }
+  // Single lifecycle wrapper so `loading` is always reset and all queued
+  // waiters (onLoadHandlers) are resolved/rejected on EVERY exit path,
+  // including the early return below and any thrown error.
+  try {
+    if (ready && !forced && entries.length) {
+      unloadAfter(Self.AUTO_UNLOAD_TIMEOUT_BG)
+      loading = false
+      resolveLoadHandlers(entries)
+      return entries
+    }
 
-  loading = true
+    let loadedEntries: Self.SyncedEntry[] = []
 
-  let loadedEntries: Self.SyncedEntry[] = []
+    // Get Firefox Sync data
+    const [ffEntriesResult, gdEntriesResult] = await Promise.allSettled([
+      Settings.state.syncUseFirefox ? Self.Firefox.loadSyncedEntries() : [],
+      Settings.state.syncUseGoogleDrive ? Self.Google.loadSyncedEntries() : [],
+    ])
+    const ffEntries = Utils.settledOr(ffEntriesResult, [])
+    let gdEntries = Utils.settledOr(gdEntriesResult, null)
 
-  // Get Firefox Sync data
-  const [ffEntriesResult, gdEntriesResult] = await Promise.allSettled([
-    Settings.state.syncUseFirefox ? Self.Firefox.loadSyncedEntries() : [],
-    Settings.state.syncUseGoogleDrive ? Self.Google.loadSyncedEntries() : [],
-  ])
-  const ffEntries = Utils.settledOr(ffEntriesResult, [])
-  let gdEntries = Utils.settledOr(gdEntriesResult, null)
+    loadedEntries.push(...ffEntries)
 
-  loadedEntries.push(...ffEntries)
+    if (gdEntries) {
+      loadedEntries.push(...gdEntries)
+    } else {
+      gdEntries = []
+      Logs.err('Sync._load: Cannot load entries from google')
+      IPC.sendToSidebars('notify', {
+        icon: '#icon_sync',
+        lvl: 'err',
+        title: translate('sync.err.google_entries'),
+        details: translate('sync.err.google_entries_sub'),
+      })
+    }
 
-  if (gdEntries) {
-    loadedEntries.push(...gdEntries)
-  } else {
-    gdEntries = []
-    Logs.err('Sync._load: Cannot load entries from google')
-    IPC.sidebars('notify', {
-      icon: '#icon_sync',
-      lvl: 'err',
-      title: translate('sync.err.google_entries'),
-      details: translate('sync.err.google_entries_sub'),
+    // Sort by time
+    loadedEntries.sort((a, b) => (b.time ?? 0) - (a.time ?? 0))
+
+    // Merge same entries
+    const entryIds: Set<string> = new Set()
+    loadedEntries = loadedEntries.filter(e => {
+      if (!e.id) return true
+
+      // Set corresponding google drive file id
+      if (!e.gdFileId) {
+        const gdEntry = gdEntries.find(gde => gde.id === e.id)
+        if (gdEntry?.gdFileId) e.gdFileId = gdEntry.gdFileId
+      }
+
+      // Set corresponding firefox sync key
+      if (!e.ffKey) {
+        const ffEntry = ffEntries.find(ffe => ffe.id === e.id)
+        if (ffEntry?.ffKey) e.ffKey = ffEntry.ffKey
+      }
+
+      if (!entryIds.has(e.id)) {
+        entryIds.add(e.id)
+        return true
+      }
     })
+
+    ready = true
+    loading = false
+    entries = loadedEntries
+
+    resolveLoadHandlers(loadedEntries)
+
+    Logs.info('Sync._load: Loaded entries count:', loadedEntries.length)
+
+    unloadAfter(Self.AUTO_UNLOAD_TIMEOUT_BG)
+
+    return loadedEntries
+  } catch (err) {
+    loading = false
+    unloadAfter(Self.AUTO_UNLOAD_TIMEOUT_BG)
+    rejectLoadHandlers(err)
+    throw err
   }
-
-  // Sort by time
-  loadedEntries.sort((a, b) => (b.time ?? 0) - (a.time ?? 0))
-
-  // Merge same entries
-  const entryIds: Set<string> = new Set()
-  loadedEntries = loadedEntries.filter(e => {
-    if (!e.id) return true
-
-    // Set corresponding google drive file id
-    if (!e.gdFileId) {
-      const gdEntry = gdEntries.find(gde => gde.id === e.id)
-      if (gdEntry?.gdFileId) e.gdFileId = gdEntry.gdFileId
-    }
-
-    // Set corresponding firefox sync key
-    if (!e.ffKey) {
-      const ffEntry = ffEntries.find(ffe => ffe.id === e.id)
-      if (ffEntry?.ffKey) e.ffKey = ffEntry.ffKey
-    }
-
-    if (!entryIds.has(e.id)) {
-      entryIds.add(e.id)
-      return true
-    }
-  })
-
-  ready = true
-  loading = false
-  entries = loadedEntries
-
-  if (onLoadHandlers.length) {
-    onLoadHandlers.forEach(h => h.ok(loadedEntries))
-    onLoadHandlers = []
-  }
-
-  Logs.info('Sync._load: Loaded entries count:', loadedEntries.length)
-
-  unloadAfter(Self.AUTO_UNLOAD_TIMEOUT_BG)
-
-  return loadedEntries
 }
 
 export function unload() {

@@ -196,11 +196,6 @@ export async function _load(forced?: boolean): Promise<Self.SyncedEntry[]> {
   } catch (err) {
     Logs.err('Cannot load sync', err)
 
-    if (onLoadHandlers.length) {
-      onLoadHandlers.forEach(h => h.err(err))
-      onLoadHandlers = []
-    }
-
     Notifications.notify({
       icon: '#icon_sync',
       lvl: 'err',
@@ -214,6 +209,8 @@ export async function _load(forced?: boolean): Promise<Self.SyncedEntry[]> {
   reactive.loading = false
   reactive.entries = entries
 
+  // Resolve every waiter (and the primary caller) consistently — on error
+  // `entries` stays empty and the notification above already surfaced it.
   if (onLoadHandlers.length) {
     onLoadHandlers.forEach(h => h.ok(entries))
     onLoadHandlers = []

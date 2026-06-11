@@ -119,8 +119,11 @@ export async function sleep(ms = 1000): Promise<void> {
  */
 export function deadline<T>(deadline: number, fallback: T, promise: Promise<T>): Promise<T> {
   return new Promise((ok, meh) => {
-    setTimeout(() => ok(fallback), deadline)
-    promise.then(ok).catch(meh)
+    const timer = setTimeout(() => ok(fallback), deadline)
+    promise
+      .then(ok)
+      .catch(meh)
+      .finally(() => clearTimeout(timer))
   })
 }
 
@@ -251,9 +254,11 @@ export function colorFromString(str: string, minLightness = 50): string {
   let h = 0
   let s = 0
   let l = 0
-  for (let pcc, cc, i = 1; i < str.length; i += 2) {
-    cc = str.charCodeAt(i)
-    pcc = str.charCodeAt(i - 1)
+  for (let i = 0; i < str.length; i += 2) {
+    const pcc = str.charCodeAt(i)
+    // Trailing char of odd-length strings has no pair; count it as 0 so it
+    // still contributes (instead of being silently dropped).
+    const cc = i + 1 < str.length ? str.charCodeAt(i + 1) : 0
     h += pcc + cc
     s += pcc
     l += cc
@@ -267,7 +272,7 @@ export function colorFromString(str: string, minLightness = 50): string {
 
 const RGBA_RE = /rgba?\((\d+%?)[,\s]\s*(\d+%?)[,\s]\s*(\d+%?)(,|\s\/\s)?\s*([\d.]+%?)?\)/
 const HEXA_RE =
-  /^#([0-f])([0-f])([0-f])([0-f])?$|^#([0-f][0-f])([0-f][0-f])([0-f][0-f])([0-f][0-f])?$/
+  /^#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])?$|^#([0-9a-fA-F][0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])?$/
 const HSLA_RE = /hsla?\((\d+%?)[,\s]\s*(\d+%?)[,\s]\s*(\d+%?)[,\s]?\s*([\d.]+%?)?\)/
 export function toRGBA(color?: string | T.RGB | T.RGBA | null): T.RGBA | undefined {
   if (!color) return
@@ -288,13 +293,13 @@ export function toRGBA(color?: string | T.RGB | T.RGBA | null): T.RGBA | undefin
     const g = rgba[2]
     let gn = parseInt(g)
     if (isNaN(gn)) return
-    if (g.endsWith('%')) gn = Math.round((rn / 100) * 255)
+    if (g.endsWith('%')) gn = Math.round((gn / 100) * 255)
     if (gn > 255) gn = 255
 
     const b = rgba[3]
     let bn = parseInt(b)
     if (isNaN(bn)) return
-    if (b.endsWith('%')) bn = Math.round((rn / 100) * 255)
+    if (b.endsWith('%')) bn = Math.round((bn / 100) * 255)
     if (bn > 255) bn = 255
 
     const a = rgba[5]
@@ -467,58 +472,60 @@ export async function parseDragEvent(
   event: DragEvent,
   lastFocusedId?: ID
 ): Promise<DragEventParseResult | undefined> {
-  return new Promise<DragEventParseResult | undefined>(async res => {
-    if (!event.dataTransfer) return res(undefined)
-    const result: DragEventParseResult = {}
-    const types = event.dataTransfer.types
+  if (!event.dataTransfer) return undefined
+  const result: DragEventParseResult = {}
+  const types = event.dataTransfer.types
 
-    let urlType
-    if (types.includes('text/x-moz-url-data')) urlType = 'text/x-moz-url-data'
-    else if (types.includes('text/x-moz-url')) urlType = 'text/x-moz-url'
-    else if (types.includes('text/x-moz-text-internal')) urlType = 'text/x-moz-text-internal'
+  let urlType
+  if (types.includes('text/x-moz-url-data')) urlType = 'text/x-moz-url-data'
+  else if (types.includes('text/x-moz-url')) urlType = 'text/x-moz-url'
+  else if (types.includes('text/x-moz-text-internal')) urlType = 'text/x-moz-text-internal'
 
-    let isNativeTab = false
-    if (types.includes('text/x-moz-text-internal')) isNativeTab = true
+  let isNativeTab = false
+  if (types.includes('text/x-moz-text-internal')) isNativeTab = true
 
-    let textType
-    if (types.includes('text/x-moz-url-desc')) textType = 'text/x-moz-url-desc'
-    else if (types.includes('text/plain')) textType = 'text/plain'
+  let textType
+  if (types.includes('text/x-moz-url-desc')) textType = 'text/x-moz-url-desc'
+  else if (types.includes('text/plain')) textType = 'text/plain'
 
-    for (const item of event.dataTransfer.items) {
-      // List of URL\nTitle
-      if (item.type === 'text/x-moz-url') {
-        const value = await getStringFromDragItem(item)
-        const list = value.split('\n')
-        const items = []
-        for (let i = 0; i < list.length; i += 2) {
-          const url = list[i]
-          const title = list[i + 1]
-          items.push({ id: i, url, title })
-        }
-        if (items.length) result.items = items
+  for (const item of event.dataTransfer.items) {
+    // List of URL\nTitle
+    if (item.type === 'text/x-moz-url') {
+      const value = await getStringFromDragItem(item)
+      const list = value.split('\n')
+      const items = []
+      for (let i = 0; i < list.length; i += 2) {
+        const url = list[i]
+        const title = list[i + 1]
+        items.push({ id: i, url, title })
       }
+      if (items.length) result.items = items
+    }
 
-      if (!result.url && item.type === urlType) {
-        const value = await getStringFromDragItem(item)
-        if (value && urlType === 'text/x-moz-url') {
-          const urlAndTitle = value.split('\n')
-          result.url = urlAndTitle[0]
-          result.text = urlAndTitle[1]
-        } else if (isNativeTab && lastFocusedId !== undefined) {
+    if (!result.url && item.type === urlType) {
+      const value = await getStringFromDragItem(item)
+      if (value && urlType === 'text/x-moz-url') {
+        const urlAndTitle = value.split('\n')
+        result.url = urlAndTitle[0]
+        result.text = urlAndTitle[1]
+      } else if (isNativeTab && lastFocusedId !== undefined) {
+        try {
           result.matchedNativeTabs = (await browser.tabs.query({
             highlighted: true,
             windowId: lastFocusedId,
           })) as T.Tab[]
-        } else {
-          result.url = value
+        } catch {
+          // Window may have been closed mid-drag; degrade gracefully.
         }
+      } else {
+        result.url = value
       }
-      if (!result.text && item.type === textType) result.text = await getStringFromDragItem(item)
-      if (!result.file && item.kind === 'file') result.file = item.getAsFile()
     }
+    if (!result.text && item.type === textType) result.text = await getStringFromDragItem(item)
+    if (!result.file && item.kind === 'file') result.file = item.getAsFile()
+  }
 
-    res(result)
-  })
+  return result
 }
 
 export function isGroupUrl(url: string): boolean {
@@ -745,26 +752,27 @@ export function findUrls(str: string): string[] {
 }
 
 export async function loadBinAsBase64(url: string): Promise<string | ArrayBuffer | null> {
-  return new Promise(async res => {
-    const deadline = setTimeout(() => res(null), 2000)
-
-    let response
-    try {
-      response = await fetch(url, {
-        method: 'GET',
-        mode: 'no-cors',
-        credentials: 'omit',
-      })
+  return new Promise(res => {
+    let settled = false
+    const settle = (value: string | ArrayBuffer | null): void => {
+      if (settled) return
+      settled = true
       clearTimeout(deadline)
-    } catch (err) {
-      return res(null)
+      res(value)
     }
-    if (!response) return res(null)
+    const deadline = setTimeout(() => settle(null), 2000)
 
-    const blob = await response.blob()
-    const reader = new FileReader()
-    reader.onload = () => res(reader.result)
-    reader.readAsDataURL(blob)
+    fetch(url, { method: 'GET', mode: 'no-cors', credentials: 'omit' })
+      .then(response => {
+        if (!response) return settle(null)
+        return response.blob().then(blob => {
+          const reader = new FileReader()
+          reader.onload = () => settle(reader.result)
+          reader.onerror = () => settle(null)
+          reader.readAsDataURL(blob)
+        })
+      })
+      .catch(() => settle(null))
   })
 }
 
@@ -960,10 +968,14 @@ export function decodePunycode(input: string): string {
 
 // Stolen from https://github.com/bestiejs/punycode.js/ (MIT License)
 export function decodeUrlPunycode(url: string): string {
-  if (!url.startsWith('xn--')) return url
+  if (!url.includes('xn--')) return url
 
+  // Decode only the labels that are actually punycode (start with `xn--`),
+  // leaving every other label untouched.
   const labels = url.split('.')
-  const result = labels.map(l => decodePunycode(l.slice(4).toLowerCase())).join('.')
+  const result = labels
+    .map(l => (l.startsWith('xn--') ? decodePunycode(l.slice(4).toLowerCase()) : l))
+    .join('.')
   return result
 }
 
@@ -991,7 +1003,7 @@ export function rmFromArray<T>(arr: T[], val: T): number {
 }
 
 export function isRegExp(value: unknown): value is RegExp {
-  return !!(value as RegExp).test
+  return value instanceof RegExp
 }
 
 interface RetryConfig {
@@ -1002,23 +1014,19 @@ interface RetryConfig {
 }
 
 export async function retry(conf: RetryConfig): Promise<void> {
-  return new Promise(async res => {
-    const increment = conf.increment ?? 0
-    let count = conf.count
-    let interval = conf.interval
+  const increment = conf.increment ?? 0
+  let count = conf.count
+  let interval = conf.interval
 
-    while (count--) {
-      let result = false
-      await conf.action(() => (result = true), count === 0)
+  while (count--) {
+    let result = false
+    await conf.action(() => (result = true), count === 0)
 
-      if (!result || count <= 0) break
+    if (!result || count <= 0) break
 
-      await sleep(interval)
-      interval += increment
-    }
-
-    res()
-  })
+    await sleep(interval)
+    interval += increment
+  }
 }
 
 interface PendingConfig<R> {
@@ -1195,13 +1203,15 @@ export class AsyncQueue {
 
     this._waitingQueue = true
 
-    const result = await fn(...args)
-
-    if (this._queue.length) this._processQueue()
-    else this._waitingQueue = false
-
-    /* eslint @typescript-eslint/no-unsafe-return: off */
-    return result
+    try {
+      /* eslint @typescript-eslint/no-unsafe-return: off */
+      return await fn(...args)
+    } finally {
+      // Keep the queue alive even if `fn` rejected: drain queued tasks or
+      // release the lock so the queue never deadlocks on a single failure.
+      if (this._queue.length) this._processQueue()
+      else this._waitingQueue = false
+    }
   }
 
   private async _processQueue() {
@@ -1270,6 +1280,14 @@ export function withoutEmptyFolders<T extends { id: ID; url?: string; parentId?:
 ): T[] {
   const nonEmptyFolders = new Set<ID>()
   const itemsById = new Map<ID, T>()
+
+  // First pass: index every item so ancestor lookups work regardless of
+  // whether children precede their parents in the input array.
+  for (const item of items) {
+    itemsById.set(item.id, item)
+  }
+
+  // Second pass: mark every ancestor folder of a leaf (url-bearing) item.
   for (const item of items) {
     if (
       item.url &&
@@ -1278,13 +1296,11 @@ export function withoutEmptyFolders<T extends { id: ID; url?: string; parentId?:
       !nonEmptyFolders.has(item.parentId)
     ) {
       let parent = itemsById.get(item.parentId ?? D.NOID)
-      while (parent) {
+      while (parent && !nonEmptyFolders.has(parent.id)) {
         nonEmptyFolders.add(parent.id)
         parent = itemsById.get(parent.parentId ?? D.NOID)
       }
     }
-
-    itemsById.set(item.id, item)
   }
 
   return items.filter(item => item.url || nonEmptyFolders.has(item.id))

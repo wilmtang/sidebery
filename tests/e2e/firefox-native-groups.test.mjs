@@ -124,8 +124,8 @@ test(
     )
 
     await openNativeGroupMenu(driver)
-    await setSidebarPrompt(driver, RENAMED_GROUP_TITLE)
     await pickContextMenuOption(driver, 'Edit title')
+    await submitRenameDialog(driver, RENAMED_GROUP_TITLE)
 
     const renamed = await waitFor(async () => {
       const snapshot = await getNativeGroupSnapshot(driver, RENAMED_GROUP_TITLE)
@@ -438,14 +438,51 @@ async function pickNativeGroupColor(driver, label) {
   await pickContextMenuOption(driver, label)
 }
 
-async function setSidebarPrompt(driver, value) {
+async function submitRenameDialog(driver, value) {
+  // Native group rename now uses Sidebery's in-app dialog popup (with a text
+  // input) instead of window.prompt. Wait for it, fill the input, click Save.
+  await waitFor(async () => {
+    return await driver.executeScript(
+      `return document.querySelector('.Dialog .popup .TextInput input') !== null`
+    )
+  }, 'native group rename dialog')
+
   await driver.executeScript(
     `
-      window.__sideberyE2EPromptValue = arguments[0];
-      window.prompt = () => window.__sideberyE2EPromptValue;
+      const input = document.querySelector('.Dialog .popup .TextInput input');
+      if (!input) throw new Error('Rename dialog input not found');
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      setter.call(input, arguments[0]);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+
+      const save = [...document.querySelectorAll('.Dialog .popup .ctrls .btn')]
+        .find(el => el.textContent.trim() === arguments[1]);
+      if (!save) throw new Error('Rename dialog Save button not found');
+      const rect = save.getBoundingClientRect();
+      const init = {
+        bubbles: true,
+        button: 0,
+        buttons: 1,
+        cancelable: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2,
+        view: window,
+      };
+      save.dispatchEvent(new MouseEvent('mousedown', init));
+      save.dispatchEvent(new MouseEvent('mouseup', init));
+      save.dispatchEvent(new MouseEvent('click', init));
     `,
-    value
+    value,
+    'Save'
   )
+
+  // The dialog should disappear once the rename is submitted.
+  await waitFor(async () => {
+    return await driver.executeScript(
+      `return document.querySelector('.Dialog .popup') === null`
+    )
+  }, 'native group rename dialog dismissal')
 }
 
 async function pickContextMenuOption(driver, label) {

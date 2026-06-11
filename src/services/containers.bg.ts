@@ -19,7 +19,12 @@ export async function load(): Promise<void> {
   ready = false
   setupListeners()
   const [ffContainers, storage] = await Promise.all([
-    browser.contextualIdentities.query({}),
+    // Throws when privacy.userContext is disabled (containers off). Degrade
+    // gracefully instead of rejecting the whole load and hanging every awaiter.
+    browser.contextualIdentities.query({}).catch(err => {
+      Logs.warn('Containers.load: contextualIdentities unavailable (disabled?):', err)
+      return [] as Awaited<ReturnType<typeof browser.contextualIdentities.query>>
+    }),
     browser.storage.local.get<Stored>('containers'),
   ])
   const containers = storage.containers ?? {}
@@ -101,9 +106,12 @@ export async function getContainers() {
   return Containers.reactive.byId
 }
 
-let creating: string | undefined
+// Set (not a single string): two concurrent create() calls with different
+// names would otherwise clobber each other's "created by us" marker, causing
+// onContainerCreated to double-handle a Sidebery-initiated container.
+const creating = new Set<string>()
 export async function create(c: NewContainerConf): Promise<Container> {
-  creating = c.name
+  creating.add(c.name)
   const newRawContainer = await browser.contextualIdentities
     .create({
       name: c.name,
@@ -111,7 +119,7 @@ export async function create(c: NewContainerConf): Promise<Container> {
       icon: c.icon,
     })
     .finally(() => {
-      creating = undefined
+      creating.delete(c.name)
     })
   const newContainer = Utils.recreateNormalizedObject(newRawContainer, DEFAULT_CONTAINER)
   newContainer.id = newRawContainer.cookieStoreId
@@ -245,7 +253,7 @@ export function onStoredContainersUpdated(newContainers?: Record<ID, Container> 
 
 function onContainerCreated(info: browser.contextualIdentities.ChangeInfo): void {
   // Container is created by Sidebery (most likely), skip
-  if (creating === info.contextualIdentity.name) return
+  if (creating.has(info.contextualIdentity.name)) return
 
   if (!ready) {
     deferredEventHandling.push(() => onContainerCreated(info))

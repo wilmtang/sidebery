@@ -192,7 +192,7 @@ export async function move(
   let isMediaActive = false
   let isUpdated = false
   let mediaPrevPanelId
-  let srcPanelId
+  const srcPanelIds = new Set<ID>()
   for (const tab of tabs) {
     const parentStayStill = !ids.includes(tab.parentId)
 
@@ -203,8 +203,10 @@ export async function move(
         if (ids.includes(child.id) || !ids.includes(child.parentId)) continue
         child.parentId = tab.parentId
         orphansToSave.push(child.id)
-        if (tab.parentId !== NOID) browser.tabs.update(child.id, { openerTabId: tab.parentId })
-        else browser.tabs.update(child.id, { openerTabId: child.id })
+        const opener = tab.parentId !== NOID ? tab.parentId : child.id
+        browser.tabs.update(child.id, { openerTabId: opener }).catch(err => {
+          Logs.warn('Tabs.move: Cannot set openerTabId (orphan):', err)
+        })
       }
     }
 
@@ -229,7 +231,7 @@ export async function move(
     // Update panelId
     if (dst.panelId !== undefined && tab.panelId !== dst.panelId) {
       if (!panelIsChanged) panelIsChanged = true
-      srcPanelId = tab.panelId
+      srcPanelIds.add(tab.panelId)
 
       // Check if the media state of the panels needs to be updated
       if (!isMediaActive && (tab.audible || tab.mutedInfo?.muted || tab.mediaPaused)) {
@@ -248,8 +250,10 @@ export async function move(
     if (tab.parentId !== dst.parentId && (!oldParent || !tabs.includes(oldParent))) {
       tab.parentId = dst.parentId
 
-      if (dstParent) browser.tabs.update(tab.id, { openerTabId: dst.parentId })
-      else browser.tabs.update(tab.id, { openerTabId: tab.id })
+      const opener = dstParent ? dst.parentId : tab.id
+      browser.tabs.update(tab.id, { openerTabId: opener }).catch(err => {
+        Logs.warn('Tabs.move: Cannot set openerTabId:', err)
+      })
     }
   }
 
@@ -265,8 +269,10 @@ export async function move(
   Tabs.updateTabsIndexes()
   Tabs.updateTabsTree()
   Sidebar.recalcTabsPanels()
-  if (srcPanelId) Sidebar.recalcVisibleTabs(srcPanelId)
-  if (dst.panelId && dst.panelId !== srcPanelId) Sidebar.recalcVisibleTabs(dst.panelId)
+  // Recalc EVERY source panel the moved tabs came from (a single variable would
+  // only have kept the last one).
+  for (const srcPanelId of srcPanelIds) Sidebar.recalcVisibleTabs(srcPanelId)
+  if (dst.panelId && !srcPanelIds.has(dst.panelId)) Sidebar.recalcVisibleTabs(dst.panelId)
 
   // Update media state of panels
   if (isMediaActive && mediaPrevPanelId && dst.panelId) {
@@ -276,10 +282,10 @@ export async function move(
 
   // Recalc "updated" badge of panels
   if (isUpdated) {
-    if (srcPanelId) {
+    for (const srcPanelId of srcPanelIds) {
       Sidebar.updateUpdatedStateOfPanel(Sidebar.panelsById[srcPanelId])
     }
-    if (dst.panelId && dst.panelId !== srcPanelId) {
+    if (dst.panelId && !srcPanelIds.has(dst.panelId)) {
       Sidebar.updateUpdatedStateOfPanel(Sidebar.panelsById[dst.panelId])
     }
   }
@@ -848,7 +854,9 @@ function moveTabToPanel(tab: T.Tab, panelId: ID) {
   const index = moveToPanelStart ? panel.startTabIndex : panel.nextTabIndex
   const src: T.SrcPlaceInfo = { windowId: Windows.id, pinned: tab.pinned }
   const dst: T.DstPlaceInfo = { panelId, index }
-  Utils.GLOBAL_QUEUE.add(Tabs.move, [tab], src, dst)
+  Utils.GLOBAL_QUEUE.add(Tabs.move, [tab], src, dst).catch(err => {
+    Logs.err('Tabs.moveTabToPanel: Cannot move tab:', err)
+  })
 
   if (tab.active && Settings.state.tabsPanelSwitchActMoveAuto) {
     Sidebar.switchToPanel(panelId, true, true)
@@ -873,7 +881,9 @@ export function moveTabToPanelViaOmnibox(tabId: ID, panelId: ID) {
 
   const src: T.SrcPlaceInfo = { windowId, pinned: tab.pinned }
   const dst: T.DstPlaceInfo = { windowId, panelId, index }
-  Utils.GLOBAL_QUEUE.add(Tabs.move, [tab], src, dst)
+  Utils.GLOBAL_QUEUE.add(Tabs.move, [tab], src, dst).catch(err => {
+    Logs.err('Tabs.moveTabToPanelViaOmnibox: Cannot move tab:', err)
+  })
 
   if (tab.active) Sidebar.switchToPanel(panelId, true, true)
 }

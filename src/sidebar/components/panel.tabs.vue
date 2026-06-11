@@ -83,28 +83,87 @@ type VisibleItem =
   | { type: 'tab'; id: ID; key: string; guide: TabGuideInfo }
   | { type: 'group'; id: ID; key: string }
 
+// Precomputed, per-recompute lookups shared across all tab guides. Built in a
+// single linear pass so rendering stays O(n·depth) instead of O(n²) with large
+// tab counts (see audit N17).
+type GroupRailCtx = {
+  visibleIndexByTabId: Map<ID, number>
+  ancestorsByTabId: Map<ID, Tab[]>
+  ancestorLastVisibleIndex: Map<ID, number>
+  visualGroupIdByTabId: Map<ID, ID | undefined>
+  groupFirstVisibleIndex: Map<ID, number>
+  groupLastVisibleIndex: Map<ID, number>
+}
+
 const visibleItems = computed<VisibleItem[]>(() => {
   Tabs.reactive.nativeGroupsVersion
   const items: VisibleItem[] = []
   let prevTab: Tab | undefined
+
   const tabs = props.panel.reactive.visibleTabIds
     .map(id => Tabs.byId[id])
     .filter((tab): tab is Tab => !!tab)
-  const visibleTabs = tabs.filter(tab => Tabs.isTabVisibleInNativeGroup(tab))
 
+  // Cache the visual native group id for every tab (walks ancestors once each).
+  const visualGroupIdByTabId = new Map<ID, ID | undefined>()
   for (const tab of tabs) {
-    const nativeGroupId = Tabs.getVisualNativeGroupId(tab)
-    if (Tabs.shouldShowNativeGroupBeforeTab(tab, prevTab)) {
-      items.push({ type: 'group', id: nativeGroupId as ID, key: `g:${nativeGroupId}` })
+    visualGroupIdByTabId.set(tab.id, Tabs.getVisualNativeGroupId(tab))
+  }
+
+  // Single linear pass over the visible subset to derive everything the tree /
+  // native-group guides need: visible index, ancestor chain, the last visible
+  // index at which each ancestor has a descendant, and the first/last visible
+  // index of each native group.
+  const visibleIndexByTabId = new Map<ID, number>()
+  const ancestorsByTabId = new Map<ID, Tab[]>()
+  const ancestorLastVisibleIndex = new Map<ID, number>()
+  const groupFirstVisibleIndex = new Map<ID, number>()
+  const groupLastVisibleIndex = new Map<ID, number>()
+  let visibleIndex = 0
+  for (const tab of tabs) {
+    if (!Tabs.isTabVisibleInNativeGroup(tab)) continue
+
+    const index = visibleIndex++
+    visibleIndexByTabId.set(tab.id, index)
+
+    const ancestors = getAncestors(tab)
+    ancestorsByTabId.set(tab.id, ancestors)
+    for (const ancestor of ancestors) ancestorLastVisibleIndex.set(ancestor.id, index)
+
+    const groupId = visualGroupIdByTabId.get(tab.id)
+    if (groupId !== undefined) {
+      if (!groupFirstVisibleIndex.has(groupId)) groupFirstVisibleIndex.set(groupId, index)
+      groupLastVisibleIndex.set(groupId, index)
+    }
+  }
+
+  const ctx: GroupRailCtx = {
+    visibleIndexByTabId,
+    ancestorsByTabId,
+    ancestorLastVisibleIndex,
+    visualGroupIdByTabId,
+    groupFirstVisibleIndex,
+    groupLastVisibleIndex,
+  }
+
+  const groupHeaderCounts = new Map<ID, number>()
+  for (const tab of tabs) {
+    const groupId = visualGroupIdByTabId.get(tab.id)
+    const prevGroupId = prevTab ? visualGroupIdByTabId.get(prevTab.id) : undefined
+    if (
+      Settings.state.nativeGroupsShowInSidebar &&
+      groupId !== undefined &&
+      groupId !== prevGroupId
+    ) {
+      // Suffix the key with an occurrence index so a visual group whose tabs
+      // become non-contiguous can't emit two headers with the same Vue key (L6).
+      const occ = groupHeaderCounts.get(groupId) ?? 0
+      groupHeaderCounts.set(groupId, occ + 1)
+      items.push({ type: 'group', id: groupId, key: `g:${groupId}:${occ}` })
     }
 
-    if (Tabs.isTabVisibleInNativeGroup(tab)) {
-      items.push({
-        type: 'tab',
-        id: tab.id,
-        key: `t:${tab.id}`,
-        guide: getTabGuide(tab, visibleTabs),
-      })
+    if (visibleIndexByTabId.has(tab.id)) {
+      items.push({ type: 'tab', id: tab.id, key: `t:${tab.id}`, guide: getTabGuide(tab, ctx) })
     }
 
     prevTab = tab
@@ -113,39 +172,37 @@ const visibleItems = computed<VisibleItem[]>(() => {
   return items
 })
 
-function getTabGuide(tab: Tab, visibleTabs: Tab[]): TabGuideInfo {
-  const ancestors = getAncestors(tab)
+function getTabGuide(tab: Tab, ctx: GroupRailCtx): TabGuideInfo {
+  const ancestors = ctx.ancestorsByTabId.get(tab.id) ?? []
   const parent = ancestors[ancestors.length - 1]
+  const index = ctx.visibleIndexByTabId.get(tab.id) ?? -1
 
   return {
     slots: ancestors.map(ancestor => ({
       lvl: ancestor.lvl,
       color: getTreeGuideColor(ancestor),
-      continues: hasLaterVisibleDescendant(tab, ancestor.id, visibleTabs),
+      continues: (ctx.ancestorLastVisibleIndex.get(ancestor.id) ?? -1) > index,
     })),
     connectorColor: parent ? getTreeGuideColor(parent) : '',
-    nativeGroupThread: getNativeGroupThread(tab, visibleTabs),
+    nativeGroupThread: getNativeGroupThread(tab, ctx),
   }
 }
 
-function getNativeGroupThread(tab: Tab, visibleTabs: Tab[]): NativeGroupThread | undefined {
+function getNativeGroupThread(tab: Tab, ctx: GroupRailCtx): NativeGroupThread | undefined {
   if (!Settings.state.nativeGroupsShowInSidebar || !Settings.state.nativeGroupsShowColoredRails) {
     return
   }
 
-  const nativeGroupId = Tabs.getVisualNativeGroupId(tab)
+  const nativeGroupId = ctx.visualGroupIdByTabId.get(tab.id)
+  if (nativeGroupId === undefined) return
   const nativeGroup = Tabs.getNativeGroup(nativeGroupId)
   if (!nativeGroup) return
 
-  const index = visibleTabs.indexOf(tab)
-  if (index === -1) return
+  const index = ctx.visibleIndexByTabId.get(tab.id)
+  if (index === undefined) return
 
-  const start = !visibleTabs
-    .slice(0, index)
-    .some(t => Tabs.getVisualNativeGroupId(t) === nativeGroupId)
-  const end = !visibleTabs
-    .slice(index + 1)
-    .some(t => Tabs.getVisualNativeGroupId(t) === nativeGroupId)
+  const start = ctx.groupFirstVisibleIndex.get(nativeGroupId) === index
+  const end = ctx.groupLastVisibleIndex.get(nativeGroupId) === index
 
   return {
     color: Tabs.getNativeGroupColorValue(nativeGroup),
@@ -168,30 +225,6 @@ function getAncestors(tab: Tab): Tab[] {
   }
 
   return ancestors
-}
-
-function hasLaterVisibleDescendant(tab: Tab, ancestorId: ID, visibleTabs: Tab[]): boolean {
-  const index = visibleTabs.indexOf(tab)
-  if (index === -1) return false
-
-  for (let i = index + 1; i < visibleTabs.length; i++) {
-    if (isDescendantOf(visibleTabs[i], ancestorId)) return true
-  }
-
-  return false
-}
-
-function isDescendantOf(tab: Tab, ancestorId: ID): boolean {
-  const seen = new Set<ID>()
-  let parent = Tabs.byId[tab.parentId]
-
-  while (parent && !seen.has(parent.id)) {
-    if (parent.id === ancestorId) return true
-    seen.add(parent.id)
-    parent = Tabs.byId[parent.parentId]
-  }
-
-  return false
 }
 
 function getTreeGuideColor(tab: Tab): string {

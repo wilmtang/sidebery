@@ -51,6 +51,10 @@ async function _set(newValues: Stored, srcInfo?: IPCNodeInfo): Promise<void> {
     if (handler && newValue) handler(newValue)
   }
 
+  // Persist first, then notify: foreground instances must never be told about
+  // state that subsequently fails to persist (L11).
+  await browser.storage.local.set<Stored>(newValues)
+
   // Send changes to all connected sidebars
   if (changesForSidebar) {
     for (const [id, con] of IPC.state.sidebarConnections) {
@@ -74,19 +78,24 @@ async function _set(newValues: Stored, srcInfo?: IPCNodeInfo): Promise<void> {
       IPC.panelConfigPopup(con.id, 'storageChanged', changesForPanelConfig)
     }
   }
-
-  // Set new values
-  return browser.storage.local.set<Stored>(newValues)
 }
 export async function set(newValues: Stored, delay?: number): Promise<void> {
-  if (!delay) return _set(newValues)
+  if (!delay) {
+    // Drop buffered (delayed) writes for these keys so a pending flush can't
+    // later overwrite this newer immediate value (N13).
+    for (const key of Object.keys(newValues) as StorageKey[]) {
+      delete storageBuf[key]
+    }
+    return _set(newValues)
+  }
 
   storageBuf = { ...storageBuf, ...newValues }
 
   clearTimeout(storageBufTimeout)
   storageBufTimeout = setTimeout(() => {
-    _set(storageBuf)
+    const buffered = storageBuf
     storageBuf = {}
+    _set(buffered).catch(err => Logs.err('Storage.set: Cannot flush buffered values:', err))
   }, delay)
 }
 export function setFromRemoteFg(newValues: Stored, srcInfo: IPCNodeInfo) {

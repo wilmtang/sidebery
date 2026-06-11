@@ -17,6 +17,12 @@ import type * as GroupPage from 'src/page.group/group'
 
 export interface Message<T extends E.InstanceType, A extends ActionsKeys<T>> {
   id?: ID
+  /**
+   * Stable id that survives retries (unlike `id`, which is re-assigned on each
+   * resend). The receiver uses it to deduplicate re-delivered messages so that
+   * non-idempotent actions are not executed twice.
+   */
+  uid?: string
   dstWinId?: ID
   dstTabId?: ID
   dstType?: E.InstanceType

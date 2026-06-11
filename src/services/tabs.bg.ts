@@ -159,6 +159,7 @@ function openCachedWindow(cache: T.TabCache[]) {
       folded: !!cachedTab.folded,
     })
   }
+  if (!items.length) return
   items[0].active = true
   Windows.createWithTabs(items)
 }
@@ -285,7 +286,12 @@ function onTabRemoved(tabId: ID, info: browser.tabs.RemoveInfo): void {
   if (!tab || !tabs || info.isWindowClosing) return
 
   const index = tabs.findIndex(t => t.id === tabId)
-  if (index === -1 || tab.index !== index) return
+  if (index === -1 || tab.index !== index) {
+    // Inconsistent bg state — rebuild from scratch instead of leaving a ghost
+    // tab in byId/window.tabs (matches how sibling handlers recover).
+    reinitTabs('onTabRemoved: index mismatch')
+    return
+  }
 
   tabs.splice(index, 1)
   delete Tabs.byId[tabId]
@@ -348,7 +354,9 @@ function onTabUpdated(tabId: ID, change: browser.tabs.ChangeInfo): void {
   }
 
   if (!tab.internal && change.favIconUrl?.startsWith('data:')) {
-    Favicons.saveFavicon(tab.url, change.favIconUrl)
+    // Use the incoming url if present: a combined url+favIconUrl event would
+    // otherwise associate the new icon with the tab's previous domain.
+    Favicons.saveFavicon(change.url ?? tab.url, change.favIconUrl)
   }
 
   Object.assign(tab, change)
@@ -409,12 +417,19 @@ export function showProxyBadge(tabId: ID): void {
     Logs.err('Tabs.showProxyBadge: Cannot show proxy badge:', err)
   })
 }
-let showProxyBadgeTimeout: number | undefined
+// Per-tab debounce timers: a single shared timer let a second proxified tab
+// cancel the first tab's badge, so only one of several would ever show.
+const showProxyBadgeTimeouts = new Map<ID, number>()
 function showProxyBadgeDebounced(tabId: ID, delay = 500): void {
-  if (showProxyBadgeTimeout) clearTimeout(showProxyBadgeTimeout)
-  showProxyBadgeTimeout = setTimeout(() => {
-    showProxyBadge(tabId)
-  }, delay)
+  const existing = showProxyBadgeTimeouts.get(tabId)
+  if (existing) clearTimeout(existing)
+  showProxyBadgeTimeouts.set(
+    tabId,
+    setTimeout(() => {
+      showProxyBadgeTimeouts.delete(tabId)
+      showProxyBadge(tabId)
+    }, delay)
+  )
 }
 
 /**
@@ -572,34 +587,35 @@ export async function updateBgTabsTreeData(): Promise<void> {
     }
   }
 
-  let trees: T.TabsTreeData[]
-  try {
-    trees = await Promise.all(receivingSidebarTrees)
-  } catch (err) {
-    Logs.err('Tabs.updateBgTabsTreeData: Error on receivingSidebarTrees:', err)
-    trees = []
-  }
+  // allSettled (not all): one window's failed request must not flatten the
+  // tree/panel data of EVERY window. Windows whose fetch rejected are skipped
+  // below so their existing bg tree data is preserved (e.g. for snapshots).
+  const trees = await Promise.allSettled(receivingSidebarTrees)
 
-  for (let tree, window, i = 0; i < windowsList.length; i++) {
-    tree = trees[i]
+  for (let window, i = 0; i < windowsList.length; i++) {
     window = windowsList[i]
     if (!window?.tabs) {
       Logs.warn('Tabs.updateBgTabsTreeData: No window tabs, i:', i)
       continue
     }
 
+    const treeResult = trees[i]
+    if (treeResult?.status !== 'fulfilled') {
+      // No authoritative tree for this window — preserve existing data, do NOT
+      // run the destructive reset below.
+      Logs.warn('Tabs.updateBgTabsTreeData: Tree fetch failed, preserving data, i:', i)
+      continue
+    }
+    const tree = treeResult.value
+
     const treeDataById: Record<ID, T.TabTreeData> = {}
     let prevPanelId = D.NOID
-    if (tree) {
-      for (const data of tree) {
-        if (data.pid === D.SAMEID) data.pid = prevPanelId
-        prevPanelId = data.pid ?? D.NOID
-        treeDataById[data.id] = data
-      }
-      Logs.info('Tabs.updateBgTabsTreeData: win/sdb tabs len:', window.tabs.length, tree.length)
-    } else {
-      Logs.warn('Tabs.updateBgTabsTreeData: No sidebar tree, i:', i)
+    for (const data of tree) {
+      if (data.pid === D.SAMEID) data.pid = prevPanelId
+      prevPanelId = data.pid ?? D.NOID
+      treeDataById[data.id] = data
     }
+    Logs.info('Tabs.updateBgTabsTreeData: win/sdb tabs len:', window.tabs.length, tree.length)
 
     for (const tab of window.tabs) {
       tab.lvl = 0
@@ -816,15 +832,29 @@ export async function reopenTab(tab: T.BgTab, url: string, cookieStoreId?: strin
 
   if (index === undefined) index = tab.index
 
-  await browser.tabs.create({
-    windowId: tab.windowId,
-    url: Utils.sanitizeUrl(url),
-    cookieStoreId,
-    active: tab.active,
-    index,
-    pinned: tab.pinned,
-  })
-  await browser.tabs.remove(tab.id)
+  // Create the replacement first; only remove the original after it succeeds,
+  // so a failed create (e.g. deleted container / invalid cookieStoreId) leaves
+  // the original tab intact instead of losing it. Never throw — this runs as a
+  // proxy.onRequest blocking response and on the GLOBAL_QUEUE.
+  try {
+    await browser.tabs.create({
+      windowId: tab.windowId,
+      url: Utils.sanitizeUrl(url),
+      cookieStoreId,
+      active: tab.active,
+      index,
+      pinned: tab.pinned,
+    })
+  } catch (err) {
+    Logs.err('Tabs.reopenTab: Cannot create replacement tab, keeping original:', err)
+    return
+  }
+
+  try {
+    await browser.tabs.remove(tab.id)
+  } catch (err) {
+    Logs.err('Tabs.reopenTab: Cannot remove original tab:', err)
+  }
 }
 
 export function getActiveTabInLastFocusedWindow() {

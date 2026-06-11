@@ -256,7 +256,7 @@ class BkmNode {
       Logs.warn('BkmNode.rmChildByIndex: childfree:', this.id)
       return
     }
-    if (index < 0 || index > this.children.length) {
+    if (index < 0 || index >= this.children.length) {
       Logs.warn('BkmNode.rmChildByIndex: incorrect index:', index)
       return
     }

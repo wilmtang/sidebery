@@ -1992,6 +1992,12 @@ export const commonTranslations: Translations = {
   'menu.native_group.ungroup': {
     en: 'Ungroup tabs',
   },
+  'dialog.native_group_rename.title': {
+    en: 'Rename group',
+  },
+  'dialog.native_group_rename.placeholder': {
+    en: 'Group name',
+  },
   'menu.tab.flatten': {
     en: 'Flatten',
     de: 'Plätten',

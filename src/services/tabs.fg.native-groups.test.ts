@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import * as Settings from 'src/services/settings'
 import * as Tabs from 'src/services/tabs.fg'
 import * as Selection from 'src/services/selection.fg'
+import * as Popups from 'src/services/popups.fg'
+import * as Windows from 'src/services/windows.fg'
 import { tabsMenuOptions } from 'src/services/menu.fg.options.tabs'
 import { MTab, addMTab, resetMTabs } from 'src/defaults/mocks.tabs.fg'
 
@@ -214,6 +216,53 @@ describe('Tabs.toggleNativeGroupCollapsed()', () => {
   })
 })
 
+describe('Tabs.ungroupNativeGroup()', () => {
+  afterEach(() => {
+    delete (browser as any).tabGroups
+    delete (browser.tabs as any).ungroup
+    delete (browser.tabs as any).remove
+    resetMTabs()
+    Windows.setCurrentId(-1)
+    Tabs.reactive.nativeGroups = {}
+    Tabs.reactive.nativeGroupsVersion = 0
+  })
+
+  test('ungroups member tabs and closes the orphaned Sidebery group page', async () => {
+    Windows.setCurrentId(1)
+    const ungroup = vi.fn(async () => undefined)
+    const remove = vi.fn(async () => undefined)
+    ;(browser.tabs as any).ungroup = ungroup
+    ;(browser.tabs as any).remove = remove
+    ;(browser as any).tabGroups = { TAB_GROUP_ID_NONE: -1 }
+
+    addMTab({ id: 5, groupId: 42, isGroup: true, title: 'Group page' })
+    addMTab({ id: 6, groupId: 42, title: 'Tab A' })
+    addMTab({ id: 7, groupId: 42, title: 'Tab B' })
+
+    await Tabs.ungroupNativeGroup(42)
+
+    expect(ungroup).toHaveBeenCalledWith([6, 7])
+    expect(remove).toHaveBeenCalledWith(5)
+  })
+
+  test('ungroups normally when the group has no Sidebery group page', async () => {
+    Windows.setCurrentId(1)
+    const ungroup = vi.fn(async () => undefined)
+    const remove = vi.fn(async () => undefined)
+    ;(browser.tabs as any).ungroup = ungroup
+    ;(browser.tabs as any).remove = remove
+    ;(browser as any).tabGroups = { TAB_GROUP_ID_NONE: -1 }
+
+    addMTab({ id: 6, groupId: 42, title: 'Tab A' })
+    addMTab({ id: 7, groupId: 42, title: 'Tab B' })
+
+    await Tabs.ungroupNativeGroup(42)
+
+    expect(ungroup).toHaveBeenCalledWith([6, 7])
+    expect(remove).not.toHaveBeenCalled()
+  })
+})
+
 describe('native group tab menu options', () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -246,17 +295,55 @@ describe('native group tab menu options', () => {
     addMTab({ id: 7, groupId: 42, title: 'First tab title' })
     Selection.selectTabs([7])
     Tabs.reactive.nativeGroupsSelectedId = 42
-    vi.spyOn(window, 'prompt').mockReturnValue('New group title')
+    const ask = vi.spyOn(Popups, 'ask').mockImplementation(async conf => {
+      conf.input?.update('New group title')
+      return 'save'
+    })
 
     const option = tabsMenuOptions.editTabTitle()
     if (!option || Array.isArray(option)) throw new Error('Expected edit-title menu option')
 
     await option.onClick?.()
 
+    expect(ask).toHaveBeenCalled()
     expect(update).toHaveBeenCalledWith(42, { title: 'New group title' })
     expect(Tabs.reactive.nativeGroups[42].title).toBe('New group title')
     expect(Tabs.byId[7]?.reactive.customTitleEdit).toBe(false)
     expect(Tabs.byId[7]?.customTitle).toBeUndefined()
+  })
+
+  test('cancelling the rename dialog leaves the native group title unchanged', async () => {
+    const update = vi.fn(
+      async (groupId: ID, updateProperties: browser.tabGroups.UpdateProperties) => ({
+        ...Tabs.reactive.nativeGroups[groupId],
+        ...updateProperties,
+      })
+    )
+    ;(browser as any).tabGroups = { update }
+    Tabs.reactive.nativeGroups = {
+      42: {
+        collapsed: false,
+        color: 'blue',
+        id: 42,
+        title: 'Old group title',
+        windowId: 1,
+      },
+    }
+    addMTab({ id: 7, groupId: 42, title: 'First tab title' })
+    Selection.selectTabs([7])
+    Tabs.reactive.nativeGroupsSelectedId = 42
+    vi.spyOn(Popups, 'ask').mockImplementation(async conf => {
+      conf.input?.update('New group title')
+      return 'cancel'
+    })
+
+    const option = tabsMenuOptions.editTabTitle()
+    if (!option || Array.isArray(option)) throw new Error('Expected edit-title menu option')
+
+    await option.onClick?.()
+
+    expect(update).not.toHaveBeenCalled()
+    expect(Tabs.reactive.nativeGroups[42].title).toBe('Old group title')
   })
 
   test('hides tab-only site config from native group header menus', () => {

@@ -10,6 +10,15 @@
   .popup(@click.stop)
     h2 {{dialog.title}}
     .note(v-if="dialog.note") {{dialog.note}}
+    TextInput.input(
+      v-if="dialog.input"
+      ref="inputEl"
+      :value="inputValue"
+      :or="dialog.input.placeholder"
+      :line="true"
+      :tabindex="'-1'"
+      @update:value="onInputUpdate"
+      @keydown="onInputKD")
     ToggleField(
       v-if="dialog.checkbox"
       :label="dialog.checkbox.label"
@@ -24,19 +33,44 @@
 
 <script lang="ts" setup>
 import { onMounted, ref } from 'vue'
-import type { Dialog } from 'src/types'
+import type { Dialog, TextInputComponent } from 'src/types'
 import ToggleField from 'src/components/toggle-field.vue'
+import TextInput from 'src/components/text-input.vue'
 
 const props = defineProps<{ dialog: Dialog }>()
 const focusedBtnIndex = ref(-1)
 let prevFocusedBtnIndex = -1
 const focusStealer = ref<HTMLElement | null>(null)
+const inputEl = ref<TextInputComponent | null>(null)
+const inputValue = ref(props.dialog.input?.value ?? '')
 
 onMounted(() => {
-  if (document.hasFocus() && focusStealer.value) {
+  if (props.dialog.input && inputEl.value) {
+    inputEl.value.focus()
+    inputEl.value.selectAll()
+  } else if (document.hasFocus() && focusStealer.value) {
     focusStealer.value.focus()
   }
 })
+
+function onInputUpdate(value: string): void {
+  inputValue.value = value
+  props.dialog.input?.update(value)
+}
+
+function onInputKD(e: KeyboardEvent): void {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    const defaultValue = props.dialog.buttonsDefaultFocus
+    const btn =
+      (defaultValue && props.dialog.buttons.find(b => b.value === defaultValue)) ||
+      props.dialog.buttons[0]
+    if (btn) answer(btn.value)
+  } else if (e.key === 'Escape') {
+    e.preventDefault()
+    answer(null)
+  }
+}
 
 function initFocusedBtn() {
   if (!document.hasFocus()) return

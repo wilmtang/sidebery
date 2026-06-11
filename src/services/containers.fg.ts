@@ -70,9 +70,12 @@ export async function saveContainer(container: Container, delay?: number) {
   } else {
     saveContainerTimeout = setTimeout(() => {
       saveContainerTimeout = undefined
-      IPC.bg('setContainers', Utils.clone(containersToSave), IPC.getInfo())
+      const cts = Utils.clone(containersToSave)
       containersToSave = {}
-    })
+      IPC.bg('setContainers', cts, IPC.getInfo()).catch(err => {
+        Logs.err('Containers.saveContainer: Cannot save containers:', err)
+      })
+    }, delay)
   }
 }
 

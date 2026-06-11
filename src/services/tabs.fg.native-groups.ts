@@ -1,11 +1,13 @@
 import type * as T from 'src/types'
 import * as D from 'src/defaults'
 import * as Utils from 'src/utils'
+import { translate } from 'src/dict'
 import * as Logs from 'src/services/logs'
 import * as Settings from 'src/services/settings'
 import * as Sidebar from 'src/services/sidebar.fg'
 import * as Windows from 'src/services/windows.fg'
 import * as Tabs from 'src/services/tabs.fg'
+import * as Popups from 'src/services/popups.fg'
 
 const FALLBACK_GROUP_ID_NONE = -1
 const groupPageCreationLocks = new Set<ID>()
@@ -139,7 +141,11 @@ function onNativeGroupCreated(group: browser.tabGroups.TabGroup): void {
   Sidebar.updatePanelBoundsDebounced(128)
 
   if (Settings.state.nativeGroupsCreateSideberyPage) {
-    setTimeout(() => createSideberyGroupPage(group.id), 120)
+    setTimeout(() => {
+      createSideberyGroupPage(group.id).catch(err => {
+        Logs.err('Tabs.onNativeGroupCreated: Cannot create Sidebery group page:', err)
+      })
+    }, 120)
   }
 }
 
@@ -241,21 +247,33 @@ export async function createSideberyGroupPage(groupId: ID): Promise<T.Tab | unde
   if (!firstTab) return
 
   groupPageCreationLocks.add(groupId)
+  const newTabIndex = firstTab.index
   try {
     const group = getNativeGroup(groupId)
     const title = group?.title || firstTab.title
-    Tabs.setNewTabPosition(firstTab.index, D.NOID, firstTab.panelId)
+    Tabs.setNewTabPosition(newTabIndex, D.NOID, firstTab.panelId)
 
-    const groupPage = await browser.tabs.create({
-      active: false,
-      cookieStoreId: firstTab.cookieStoreId,
-      index: firstTab.index,
-      url: Utils.createGroupUrl(title),
-      windowId: Windows.id,
+    const groupPage = await browser.tabs
+      .create({
+        active: false,
+        cookieStoreId: firstTab.cookieStoreId,
+        index: newTabIndex,
+        url: Utils.createGroupUrl(title),
+        windowId: Windows.id,
+      })
+      .catch(err => {
+        // Drop the reserved new-tab position so a stale entry can't mis-place
+        // the next tab that happens to be created at this index.
+        delete Tabs.newTabsPosition[newTabIndex]
+        Logs.err('Tabs.createSideberyGroupPage: Cannot create group page:', err)
+        return undefined
+      })
+    if (!groupPage?.id) return
+
+    await browser.tabs.group({ tabIds: groupPage.id, groupId }).catch(err => {
+      Logs.warn('Tabs.createSideberyGroupPage: Cannot group group page:', err)
     })
-
-    await browser.tabs.group({ tabIds: groupPage.id, groupId })
-    await browser.tabs.move(groupPage.id, { index: firstTab.index }).catch(() => undefined)
+    await browser.tabs.move(groupPage.id, { index: newTabIndex }).catch(() => undefined)
 
     return Tabs.byId[groupPage.id]
   } catch (err) {
@@ -287,10 +305,20 @@ function syncSideberyGroupPageTitle(groupId: ID): void {
   const currentName = Utils.getGroupName(groupPage.url)
   if (currentName === group.title) return
 
+  // Replace only the title (prefix) portion of the hash, preserving any IPPC
+  // channel suffix (`~!<chId>!ch!~`) and id so the group page's message channel
+  // keeps working after a rename. A blind PAGE_HASH_RE replace would drop them.
+  const hashIndex = groupPage.url.indexOf('#')
+  const reResult = D.PAGE_HASH_RE.exec(groupPage.url)
+  if (hashIndex === -1 || !reResult) return
+
+  const rawPrefix = reResult.groups?.prefix ?? ''
+  const hashBody = groupPage.url.slice(hashIndex + 1)
+  const suffix = hashBody.slice(rawPrefix.length)
+  const newUrl = groupPage.url.slice(0, hashIndex + 1) + encodeURIComponent(group.title) + suffix
+
   browser.tabs
-    .update(groupPage.id, {
-      url: groupPage.url.replace(D.PAGE_HASH_RE, `#${encodeURIComponent(group.title)}`),
-    })
+    .update(groupPage.id, { url: newUrl })
     .catch(err => Logs.warn('Tabs.syncSideberyGroupPageTitle: Cannot update group page:', err))
 }
 
@@ -322,11 +350,23 @@ export async function renameNativeGroup(groupId: ID): Promise<void> {
   const group = getNativeGroup(groupId)
   if (!group) return
 
-  const title = window.prompt(
-    browser.i18n.getMessage?.('editBookmarkTitle') || 'Title',
-    group.title
-  )
-  if (title === null) return
+  // window.prompt is unreliable/blocked in Firefox sidebar documents — use
+  // Sidebery's in-app dialog popup with a text input instead.
+  let title = group.title
+  const result = await Popups.ask({
+    title: translate('dialog.native_group_rename.title'),
+    input: {
+      value: group.title,
+      placeholder: translate('dialog.native_group_rename.placeholder'),
+      update: value => (title = value),
+    },
+    buttons: [
+      { value: 'save', label: translate('btn.save') },
+      { value: 'cancel', label: translate('btn.cancel'), warn: true },
+    ],
+    buttonsDefaultFocus: 'save',
+  })
+  if (result !== 'save') return
 
   await setNativeGroupTitle(groupId, title)
 }
@@ -345,10 +385,24 @@ export async function setNativeGroupColor(
 }
 
 export async function ungroupNativeGroup(groupId: ID): Promise<void> {
-  const tabIds = getNativeGroupTabs(groupId, true).map(tab => tab.id)
-  if (!tabIds.length) return
+  const groupTabs = getNativeGroupTabs(groupId, true)
+  if (!groupTabs.length) return
 
-  await browser.tabs.ungroup(tabIds).catch(err => {
-    Logs.err('Tabs.ungroupNativeGroup: Cannot ungroup tabs:', err)
-  })
+  // The Sidebery group page only makes sense as the head of a native group.
+  // When the group is dissolved, close it instead of leaving an orphan tab
+  // that renders a group with no members.
+  const groupPage = groupTabs.find(tab => tab.isGroup)
+  const tabIds = groupTabs.filter(tab => !tab.isGroup).map(tab => tab.id)
+
+  if (tabIds.length) {
+    await browser.tabs.ungroup(tabIds).catch(err => {
+      Logs.err('Tabs.ungroupNativeGroup: Cannot ungroup tabs:', err)
+    })
+  }
+
+  if (groupPage) {
+    await browser.tabs.remove(groupPage.id).catch(err => {
+      Logs.warn('Tabs.ungroupNativeGroup: Cannot remove group page:', err)
+    })
+  }
 }

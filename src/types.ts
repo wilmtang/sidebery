@@ -281,6 +281,7 @@ export interface SubListTitleInfo {
 export interface Dialog {
   title: string
   note?: string
+  input?: DialogInput
   checkbox?: DialogCheckbox
   buttons: DialogBtn[]
   buttonsCentered?: boolean
@@ -301,9 +302,16 @@ export interface DialogCheckbox {
   update: (value: boolean) => void
 }
 
+export interface DialogInput {
+  value: string
+  placeholder?: string
+  update: (value: string) => void
+}
+
 export interface DialogConfig {
   title: string
   note?: string
+  input?: DialogInput
   checkbox?: DialogCheckbox
   buttons: DialogBtn[]
   buttonsCentered?: boolean

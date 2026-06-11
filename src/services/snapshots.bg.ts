@@ -27,10 +27,18 @@ export const Snapshots = {
 const MIN_SNAP_INTERVAL = 60_000
 const MIN_LIMITING_COUNT = 1
 
+// Serialize all snapshot-list read-modify-write paths so concurrent
+// create/add/remove calls can't read the same stored list and overwrite each
+// other's changes.
+const SNAP_QUEUE = new Utils.AsyncQueue()
+
 /**
  * Create base snapshot
  */
 export async function createSnapshot(auto = false): Promise<Snapshot | undefined> {
+  return SNAP_QUEUE.add(_createSnapshot, auto)
+}
+async function _createSnapshot(auto = false): Promise<Snapshot | undefined> {
   Logs.info('Snapshots.bg.createSnapshot', auto)
 
   // Get snapshot src data and current snapshots list
@@ -158,6 +166,9 @@ export async function createSnapshot(auto = false): Promise<Snapshot | undefined
 }
 
 export async function addSnapshot(snapshot: NormalizedSnapshot): Promise<void> {
+  return SNAP_QUEUE.add(_addSnapshot, snapshot)
+}
+async function _addSnapshot(snapshot: NormalizedSnapshot): Promise<void> {
   const stored = await browser.storage.local.get<Stored>('snapshots').catch(() => undefined)
   const snapshots = stored?.snapshots ?? []
   const timestamp = Date.now()
@@ -181,6 +192,30 @@ function getExportPath(expInfo: SnapExportInfo) {
   return normPath
 }
 
+// Download a blob and reliably revoke its object URL when the download finishes
+// (or fails). Catches rejections too: user-templated filenames can contain
+// invalid characters and reject.
+function downloadAndRevoke(file: Blob, filename: string): void {
+  const url = URL.createObjectURL(file)
+  browser.downloads
+    .download({ url, filename, conflictAction: 'overwrite', saveAs: false })
+    .then(downloadId => {
+      const onChanged = (delta: browser.downloads.DownloadItemDelta) => {
+        if (delta.id !== downloadId) return
+        const state = delta.state?.current
+        if (state === 'complete' || state === 'interrupted') {
+          URL.revokeObjectURL(url)
+          browser.downloads.onChanged.removeListener(onChanged)
+        }
+      }
+      browser.downloads.onChanged.addListener(onChanged)
+    })
+    .catch(err => {
+      Logs.err('Snapshots.exportSnapshot: Cannot download export file:', err)
+      URL.revokeObjectURL(url)
+    })
+}
+
 export function exportSnapshot(snapshot: NormalizedSnapshot) {
   if (!browser?.downloads) return
 
@@ -192,23 +227,8 @@ export function exportSnapshot(snapshot: NormalizedSnapshot) {
 
   const path = getExportPath(expInfo)
 
-  if (expInfo.jsonFile) {
-    browser.downloads.download({
-      url: URL.createObjectURL(expInfo.jsonFile),
-      filename: `${path}.json`,
-      conflictAction: 'overwrite',
-      saveAs: false,
-    })
-  }
-
-  if (expInfo.mdFile) {
-    browser.downloads.download({
-      url: URL.createObjectURL(expInfo.mdFile),
-      filename: `${path}.md`,
-      conflictAction: 'overwrite',
-      saveAs: false,
-    })
-  }
+  if (expInfo.jsonFile) downloadAndRevoke(expInfo.jsonFile, `${path}.json`)
+  if (expInfo.mdFile) downloadAndRevoke(expInfo.mdFile, `${path}.md`)
 }
 
 function isSnapshotRedundant(prevSnapshot: Snapshot, snapshot: Snapshot): boolean {
@@ -516,6 +536,9 @@ function limitSnapshots(snapshots: Snapshot[]): Snapshot[] | undefined {
 }
 
 export async function removeSnapshot(id: ID): Promise<RemovingSnapshotResult> {
+  return SNAP_QUEUE.add(_removeSnapshot, id)
+}
+async function _removeSnapshot(id: ID): Promise<RemovingSnapshotResult> {
   let stored
   try {
     stored = await browser.storage.local.get<Stored>(['snapshots'])
