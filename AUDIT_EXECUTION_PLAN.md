@@ -1,8 +1,26 @@
 # Sidebery v6.1.0 — Second Audit Findings & Execution Plan
 
-**Date:** 2026-06-11
+**Date:** 2026-06-11 (rev. 2 — reconciled with the Codex review, see below)
 **Baseline:** Gemini Antigravity audit report (2026-06-10). This document contains (1) NEW findings not in that report, (2) corrections/re-grades of that report's findings, and (3) an execution plan organized into workstreams that can be handed to separate AI agents.
 **Verification status:** every NEW finding below was confirmed by reading the code at the cited lines. All 85 unit tests pass on `v6` (`npm test`).
+
+---
+
+## Rev. 2 — reconciliation with the Codex review (`REVISED_AUDIT_REPORT_AND_EXECUTION_PLAN.md`)
+
+Codex reviewed rev. 1 of this document. Outcome, after re-verifying every disputed claim against the code:
+
+**Accepted (this doc is corrected accordingly):**
+1. `tabs.fg.handlers.ts:687` already has a `.catch` — rev. 1 wrongly listed it as an uncaught call site. Removed from the hardening list (N1, WS-A). *Nuance Codex's doc omits:* a caller-side `.catch` does **not** prevent queue poisoning — the `_waitingQueue` flag is stranded inside `AsyncQueue.add` regardless of whether the returned promise is caught. Worse, once the queue is poisoned, this site's promise never settles, so its `.finally` never runs and `tab.moving` stays `true` forever. Caught call sites are not safe sites; only the WS-A queue fix is.
+2. N8 (favicon index race) is **demoted and its mechanism corrected** — the append/replace index is computed *after* `await resizeFavicon()` (favicons.bg.ts:156-166), synchronously with the write, so the "two saves compute the same append index" claim in rev. 1 was wrong. See the re-graded N8 for the real (smaller) residual races.
+3. Additional uncaught `GLOBAL_QUEUE.add` sites: `tabs.fg.move.ts:851,876` (fire-and-forget, no `.catch`). Added to N1/WS-A.
+4. Gate commands corrected: the project's type check is `npm run lint` (eslint + `vue-tsc --noemit`), not `npx tsc --noEmit`; `npm run build` and `npm run test.e2e.firefox` exist and are now part of the gate.
+
+**Pushed back / nuance added:**
+1. Codex lists `ipc.ts:527` (`request()`) alongside the async-executor hangs. Verified: **every `await` inside that executor is already wrapped in try/catch with explicit `err()`**. The only escape is a *synchronous* throw from `connectTo()`/`getConnection()` (lines 538, 588-589) — narrow but possible (e.g. invalidated extension context). Convert it for hygiene in WS-C (with the other ipc.ts work), but agents should not expect to reproduce a hang there, and the conversion must not change behavior.
+2. Codex's false-positive list is incomplete — it omits Gemini's `getIndexToReplace`, storage same-key-overwrite, `reopenTab` wrong-mechanism, and `initialTabId` items. **Part 2 of this document remains the authoritative "do not fix" list.**
+
+**Structure:** workstream letters in Part 3 are now **aligned with Codex's doc** (A=async, B=sync, C=IPC, D=background/persistence, E=pure utils, F=foreground, G=native groups) so the two documents can be read interchangeably. Codex's plan section and this one agree on scope, ordering, and dependencies; this doc carries the fuller per-finding detail and the Gemini corrections table.
 
 ---
 
@@ -12,11 +30,12 @@
 
 **N1. `AsyncQueue` deadlocks permanently when the fast-path task rejects**
 `src/utils.ts:1196-1204`. In `AsyncQueue.add()`, the first (non-queued) call runs `const result = await fn(...args)` *outside* any try/finally. If `fn` rejects, `_waitingQueue` stays `true` forever and `_processQueue()` never runs → every subsequent `add()` queues a promise that never settles.
-Blast radius (call sites):
+Blast radius (three queue instances: `utils.ts:1224` GLOBAL_QUEUE, `sync.ts:71`, `sync.bg.google.ts:24`):
 - `src/services/sync.ts:71` / `src/services/sync.bg.google.ts:24` — `_save` rethrows on network error (`sync.bg.ts:68-71`), so **one failed sync save permanently bricks all sync operations** until the background page restarts.
-- `src/services/tabs.fg.handlers.ts:687` — `GLOBAL_QUEUE.add(browser.tabs.move, ...)` is uncaught; `tabs.move` rejects easily (tab closed mid-event) → all subsequent queued tab moves in the sidebar silently hang.
+- `src/services/tabs.fg.move.ts:851,876` — `GLOBAL_QUEUE.add(Tabs.move, ...)` fire-and-forget, no `.catch` (and `:924` awaited — rejection propagates to its caller); `Tabs.move` rejects easily (tab closed mid-event).
 - `src/services/web-req.bg.ts:263,276` — see N6.
-**Fix:** wrap the fast path in try/finally (on error: drain queue / reset flag), and add `.catch` at the uncaught call sites.
+- `src/services/tabs.fg.handlers.ts:687` — *has* a `.catch` (rev. 1 wrongly said uncaught), but the `.catch` does not prevent the queue itself from being poisoned by the rejection, and once the queue is poisoned by *any* site, this site's `.finally` never runs → `tab.moving` stuck `true`. No call-site change needed here; listed to show propagation.
+**Fix:** wrap the fast path in try/finally (on error: drain queue / reset flag) so a rejection settles the caller's promise *and* keeps the queue alive; add `.catch` at the genuinely uncaught call sites (move.ts:851,876; web-req per N6; `settings.bg.ts:30`).
 
 **N2. `Sync.load()` waiters hang even on the success path**
 `src/services/sync.bg.ts:248-342`. Extends Gemini's finding #2 (which only covered the throw path): `_load()`'s early-return branch (`ready && !forced && entries.length`, lines 269-273) returns **without resolving `onLoadHandlers`**. Sequence: load B is queued; load C arrives while `loading === true` and pushes a handler; B's `_load` early-returns → C hangs forever. Also `loading = true` is set in `load()` before `QUEUE.add(_load)`; combined with N1, a stuck queue leaves `loading` true forever and all future `load()` calls accumulate as永-pending handlers.
@@ -43,8 +62,8 @@ Blast radius (call sites):
 **N7. Favicon saved against the wrong URL on combined update events** — `src/services/tabs.bg.ts:350-354`. `Favicons.saveFavicon(tab.url, change.favIconUrl)` runs **before** `Object.assign(tab, change)`; if a single `onUpdated` event carries both `url` and `favIconUrl`, the icon is associated with the *previous* page's domain.
 **Fix:** move the favicon save after `Object.assign` (or use `change.url ?? tab.url`).
 
-**N8. Favicon index race corrupts domain→icon mapping** — `src/services/favicons.bg.ts:108-189`. The save callback awaits `resizeFavicon()` between computing `index = favicons.length` and writing `favicons[index]`. Two concurrent saves (different URLs) can compute the same append index; the second overwrites the first's icon while both domains point at that index. Likely the root cause of long-standing "wrong favicon on a domain" reports.
-**Fix:** reserve the index synchronously before the await, or serialize saves through a queue (after N1 is fixed).
+**N8. ~~Favicon index race corrupts domain→icon mapping~~ RE-GRADED 🟡 Low (rev. 2, per Codex review)** — `src/services/favicons.bg.ts:108-189`. Rev. 1's mechanism was wrong: the append/replace index is computed **after** `await resizeFavicon()` (lines 156-166) and used synchronously, so two concurrent saves cannot collide on the same append slot. The real residual races are smaller: (a) `index`/`iconAlreadyExists` from `hashes.indexOf(hash)` (line 117) are computed *before* the await and can go stale — two saves of the same icon for different domains both see "not exists" and append duplicate slots (wasted capacity, no visible corruption); (b) at `MAX_COUNT_LIMIT`, `getIndexToReplace()` picks a **random** index (line 90) — two concurrent replacements can pick the same slot, leaving one domain pointing at the other's icon (rare); (c) same staleness applies to `domainInfo`.
+**Fix (optional, only if touching this file):** re-check `hashes.indexOf(hash)` after the await, or serialize saves through a queue (after N1 is fixed). Do not claim this as the root cause of "wrong favicon" reports without a repro.
 
 **N9. `handledReqId` is a single module-level string** — `src/services/web-req.bg.ts:20,242-245`. Interleaved `main_frame` requests from two tabs overwrite each other's dedup marker, so a redirect of request A is re-processed (double reopen attempt on the same tab).
 **Fix:** a small Set/LRU of recent request ids instead of one string.
@@ -75,7 +94,7 @@ Blast radius (call sites):
 
 **N18. `ipCheckCtx` clobber race** — `src/services/web-req.bg.ts:26,52,74,226-231`. Module-level single value; two concurrent IP checks for different containers route one check through the wrong container's proxy.
 
-**N19. Async-executor antipattern hangs callers on error** — `src/utils.ts:466-522` (`parseDragEvent`: `browser.tabs.query` rejecting → the drop handler awaits forever; query of a closed `lastFocusedId` window is realistic), `src/utils.ts:1004-1022` (`retry`), `src/services/ipc.ts:527` (`request`: a synchronous throw from `connectTo` — e.g. invalidated extension context — leaves the promise unsettled).
+**N19. Async-executor antipattern hangs callers on error** — `src/utils.ts:466-522` (`parseDragEvent`: `browser.tabs.query` rejecting → the drop handler awaits forever; query of a closed `lastFocusedId` window is realistic), `src/utils.ts:1004-1022` (`retry`: `await conf.action(...)` at line 1012 is unguarded — action rejection never settles the outer promise), `src/utils.ts:747-769` (`loadBinAsBase64` — see L12). Also `src/services/ipc.ts:527` (`request`) uses the pattern, **but** every `await` inside it is already try/catch-guarded with explicit `err()`; the only escape is a *synchronous* throw from `connectTo`/`getConnection` (lines 538, 588-589, e.g. invalidated extension context). Convert it for hygiene; there is no reproducible hang there today.
 **Fix:** remove `async` executors; use plain promise chains or try/catch-and-reject inside.
 
 **N20. `IPC.sidebars()` rejects wholesale and is often unawaited** — `src/services/ipc.ts:358-367` uses `Promise.all` over per-sidebar `request`s; one disconnected sidebar rejects the whole thing. Callers like `sync.bg.ts:294` (`IPC.sidebars('notify', ...)`) neither await nor catch → unhandled rejections.
@@ -94,7 +113,7 @@ Blast radius (call sites):
 - **L9.** `isRegExp(null/undefined)` throws (`(value).test` access); currently safe at its only call sites (web-req rule values) but a footgun. `src/utils.ts:993-995`.
 - **L10.** `withoutEmptyFolders` assumes parents precede children in the array; child-first input misclassifies folders as empty. `src/utils.ts:1268-1291`.
 - **L11.** `_set` notifies fg instances *before* `browser.storage.local.set` resolves — fg can apply state that then fails to persist. `src/services/storage.bg.ts:54-79`.
-- **L12.** `loadBinAsBase64`: `response.blob()` outside try/catch → unhandled rejection; timer already fired path double-resolves (harmless) but blob error is not. `src/utils.ts:747-769`.
+- **L12.** `loadBinAsBase64`: `response.blob()` (line 764) is outside the try/catch *and* the 2s deadline timer was already cleared on fetch success (line 758), so a blob failure leaves the promise permanently unsettled; `reader.onerror` is also unhandled (same outcome). `src/utils.ts:747-769`.
 
 ---
 
@@ -125,37 +144,29 @@ Hand this list to agents so they **don't burn time "fixing" non-bugs**:
 General rules for every agent:
 1. **One workstream = one branch/PR.** Branch off `v6`. Keep diffs minimal; match existing code style (no new deps).
 2. **Every behavioral fix ships with a test** where the code is testable (utils, sync logic, storage buffering are all unit-testable; there is an existing vitest setup — see `src/services/settings.test.ts`, `src/services/tabs.fg.native-groups.test.ts` — and an e2e harness `tests/e2e/firefox-native-groups.test.mjs`).
-3. Run `npm test` and `npx tsc --noEmit` (types must stay clean) before declaring done.
+3. Run `npm test`, `npm run lint` (eslint + `vue-tsc --noemit`), and `npm run build` before declaring done.
 4. **Do not fix items marked False positive in Part 2.**
 5. When a fix changes cross-context behavior (IPC, storage), state the assumption in the PR description so a reviewer can challenge it.
 
+*(Workstream letters below match Codex's `REVISED_AUDIT_REPORT_AND_EXECUTION_PLAN.md`.)*
+
 ### WS-A — Async foundations (do FIRST; small, unblocks others)
 Scope: `src/utils.ts` + uncaught call sites.
-1. N1: make `AsyncQueue.add` exception-safe (try/finally; drain queue on error). Unit-test: first task rejects → second task still runs.
-2. N19: de-async-ify executors in `retry`, `parseDragEvent`, `loadBinAsBase64` (L12); ensure all paths settle.
+1. N1: make `AsyncQueue.add` exception-safe (try/finally; drain queue on error; rejection must settle the caller's promise). Unit-test: first task rejects → second task still runs.
+2. N19: de-async-ify executors in `retry`, `parseDragEvent`, `loadBinAsBase64` (L12); ensure all paths settle. (`ipc.ts:527` conversion is hygiene-only — all its awaits are already guarded; do it in WS-C alongside other ipc.ts work to keep diffs per-file.)
 3. Gemini-confirmed: `deadline()` — clear timer on settle.
-4. Call-site hardening: `.catch` on `GLOBAL_QUEUE.add` at `tabs.fg.handlers.ts:687`, `tabs.fg.ts:864` (already has), `web-req.bg.ts:263,276` (N6 part), `settings.bg.ts:30` (`Sync.save(...).catch(Logs.err)`).
+4. Call-site hardening: `.catch` on `GLOBAL_QUEUE.add` at `tabs.fg.move.ts:851,876`, `web-req.bg.ts:263,276` (N6 part), `settings.bg.ts:30` (`Sync.save(...).catch(Logs.err)`). Do **not** touch `tabs.fg.handlers.ts:687` or `tabs.fg.ts:864` — already caught.
 Acceptance: new unit tests for AsyncQueue rejection + retry/parseDragEvent error paths.
 
-### WS-B — Pure utils correctness (independent; easiest)
-Scope: `src/utils.ts` only — all unit-testable.
-1. toRGBA percentage channels (`gn`/`bn` at lines 291/297) — Gemini #1.
-2. `decodeUrlPunycode` rewrite: per-label `xn--` check (decode only labels that start with `xn--`, leave others) — Gemini #4.
-3. L8: tighten `HEXA_RE` to `[0-9a-fA-F]`.
-4. `colorFromString` odd-length last char (include it or document).
-5. L9 `isRegExp`: `value instanceof RegExp` (keep cross-realm caveat in mind; instanceof is fine here).
-6. L10 `withoutEmptyFolders`: two-pass (build `itemsById` first).
-Acceptance: table-driven unit tests for each (e.g. `rgba(50%, 25%, 10%, 50%)`, `xn--80ak6aa92e.com`, `сайт.xn--p1ai`, `#1G2H3I`).
-
-### WS-C — Sync service lifecycle
-Scope: `src/services/sync.bg.ts`, `sync.ts`, `sync.bg.google.ts`. Depends on WS-A (queue fix).
-1. N2 + Gemini #2: restructure `load()/_load()` so `onLoadHandlers` are resolved/rejected on **every** exit path; reset `loading` in finally.
+### WS-B — Sync service lifecycle
+Scope: `src/services/sync.bg.ts`, `sync.ts`, `sync.fg.ts`, `sync.bg.google.ts`. Depends on WS-A (queue fix).
+1. N2 + Gemini #2: restructure `load()/_load()` so `onLoadHandlers` are resolved/rejected on **every** exit path (early-return at `sync.bg.ts:269-273` included); reset `loading` in finally.
 2. N20: `IPC.sidebars` → allSettled or use `sendToSidebars` for notify.
 3. L5: `removeByType` updates local `entries`.
 4. Audit every `QUEUE.add` caller for rejection handling.
 Acceptance: unit tests simulating concurrent `load()` calls (success, early-return, and throw paths) — assert no pending promise is left unsettled.
 
-### WS-D — IPC layer (highest risk; isolate; review carefully)
+### WS-C — IPC layer (highest risk; isolate; review carefully)
 Scope: `src/services/ipc.ts`.
 1. N3: per-connection confirmation keying; remove hardcoded `delete(-1)`.
 2. N4: `dstTabId` checks in `onConnect` and `onSendMsg`.
@@ -163,20 +174,31 @@ Scope: `src/services/ipc.ts`.
 4. N11: decide & implement retry policy (recommend: receiving-side dedup by msg id, short TTL).
 5. Gemini-confirmed: `getPortErrorMessage` second branch → `remotePort`.
 6. L1: `msg.arg !== undefined` in `runActionFor`.
+7. N19 (hygiene part): convert `request()`'s async executor; behavior must not change.
 Acceptance: manual matrix test — multi-window startup (3+ windows, sidebars open), multiple group pages open simultaneously, kill/restore bg page, verify each sidebar/group page only handles its own messages. This WS most needs a human-in-the-loop smoke test in Firefox.
 
-### WS-E — Background tab/window/services hardening
+### WS-D — Background tab/window/services hardening
 Scope: `src/services/tabs.bg.ts`, `windows.bg.ts`, `snapshots.bg.ts`, `containers.bg.ts`, `favicons.bg.ts`, `web-req.bg.ts`, `storage.bg.ts`, `settings.bg.ts`, `background.ts`.
 1. N5: `updateBgTabsTreeData` → allSettled, skip destructive reset on missing tree.
 2. N6: harden `reopenTab`; `.catch` queue promises in `proxyReqHandler` returning `{}`.
 3. N7: favicon save after `Object.assign` in `onTabUpdated`.
-4. N8: reserve favicon index before `await resizeFavicon`.
+4. N8 (re-graded Low, optional): only if touching favicons.bg.ts anyway — re-check `hashes.indexOf(hash)` after the resize await, or serialize saves. Not a root-cause fix for "wrong favicon" reports.
 5. N9: `handledReqId` → bounded Set.
 6. N10: reinit on `onTabRemoved` mismatch.
 7. N13: clear overlapping buffered keys on immediate `_set`.
 8. N18: pass ctx per-request instead of module-level `ipCheckCtx` (or accept and document the race).
 9. Gemini-confirmed batch: `openCachedWindow` empty-cache guard; per-tab proxy-badge timeouts (Map keyed by tabId); `lockedWindowsTabs` cleanup in `onWindowRemoved`; `onWindowFocused` unset previous `focused`; `containers.load` catch around `contextualIdentities.query` (degrade gracefully when containers are disabled); `creating` flag → Set of names; snapshot create/add serialization (single promise chain or AsyncQueue after WS-A); `URL.revokeObjectURL` after `downloads.download` completes (use `downloads.onChanged`) + `.catch` on download (invalid user-template filename chars!); uncaught `tabs.reload`/`windows.update`/`Store.set` sites; L4 `createWithTabs` ordering.
 Acceptance: unit tests where feasible (storage buffer ordering is easily testable); rest via existing e2e + manual snapshot/restore exercise.
+
+### WS-E — Pure utils correctness (independent; easiest; can run anytime)
+Scope: `src/utils.ts` only — all unit-testable.
+1. toRGBA percentage channels (`gn`/`bn` at lines 291/297) — Gemini #1.
+2. `decodeUrlPunycode` rewrite: per-label `xn--` check (decode only labels that start with `xn--`, leave others untouched — current code both misses non-leading punycode labels *and* slices 4 chars off every label) — Gemini #4.
+3. L8: tighten `HEXA_RE` to `[0-9a-fA-F]`.
+4. `colorFromString` odd-length last char (include it or document; cosmetic — hash-to-color only).
+5. L9 `isRegExp`: `value instanceof RegExp` (keep cross-realm caveat in mind; instanceof is fine here).
+6. L10 `withoutEmptyFolders`: two-pass (build `itemsById` first).
+Acceptance: table-driven unit tests for each (e.g. `rgba(50%, 25%, 10%, 50%)`, `xn--80ak6aa92e.com`, `сайт.xn--p1ai`, `#1G2H3I`).
 
 ### WS-F — Foreground sidebar fixes
 Scope: `src/services/*.fg.ts`, `src/sidebar/components/popup.context-menu.vue`, `src/page.group/group.ts`.
@@ -196,15 +218,16 @@ Acceptance: extend both test files; e2e for rename/ungroup/collapse with a Sideb
 ### Suggested sequencing
 
 ```
-WS-A (utils async)  ──┬──> WS-C (sync)
-WS-B (utils pure)     ├──> WS-E (bg services)
-                      └──> WS-F (fg fixes)      WS-D (IPC) — independent but riskiest; schedule with review time
-WS-G (native groups) — independent; product decisions needed for N14 first
+WS-A (async core)   ──┬──> WS-B (sync)
+WS-E (pure utils)     ├──> WS-D (bg services/persistence)
+                      └──> WS-F (fg fixes)
+WS-C (IPC) — independent but riskiest; schedule alone with review time
+WS-G (native groups) — independent; product decision needed for N14 first
 ```
 
-WS-A+WS-B are ~1 day combined and unblock everything. WS-D should not be batched with anything else — its regressions are the hardest to notice.
+WS-A+WS-E are ~1 day combined and unblock everything. WS-C should not be batched with anything else — its regressions are the hardest to notice.
 
 ### Verification gate (after all workstreams merge)
-1. `npm test` + `npx tsc --noEmit` + `npm run build.*` clean.
-2. e2e suite incl. extended native-group tests.
-3. Manual scenario script: 3 windows / 200+ tabs / 2 group pages / containers with reopen rules + proxy / create+restore snapshot / sync save with network offline (verify sync recovers when back online — this exercises N1+N2).
+1. `npm test` + `npm run lint` + `npm run build` clean.
+2. `npm run test.e2e.firefox` incl. extended native-group tests.
+3. Manual scenario script: 3 windows / 200+ tabs / 2 group pages / containers with reopen rules + proxy / create+restore snapshot / sync save with network offline (verify sync recovers when back online — this exercises N1+N2) / background reload during pending IPC requests (exercises N3/N12).
