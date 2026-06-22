@@ -1,505 +1,346 @@
-# Sidebery v6.1.0 - Revised Audit Report & Execution Plan
+# Sidebery v6.1.0 - Codex Follow-up Audit Report & Execution Plan
 
-**Date:** 2026-06-11
-**Author:** Codex review of `AUDIT_EXECUTION_PLAN.md`
-**Baseline reviewed:** `AUDIT_EXECUTION_PLAN.md`
-**Repo baseline:** `v6` at `a7d5804c`
-**Verification:** `npm test` passed locally: 9 test files, 85 tests.
+**Date:** 2026-06-16
+**Author:** Codex follow-up audit
+**Previous Codex audit:** `REVISED_AUDIT_REPORT_AND_EXECUTION_PLAN.md` dated 2026-06-11
+**Progress log reviewed:** `AUDIT_FIX_PROGRESS.md`
+**Repo baseline:** `v6` at `0bd72544`
+**Verification:** `npm test` passed locally: 9 test files, 100 tests.
 
-This report reviews the existing audit/execution plan, spot-checks the cited code paths, and replaces the prior plan with a tighter execution order. It does not modify source code.
+This is a follow-up audit of the current code after the A-G workstreams in
+`AUDIT_FIX_PROGRESS.md` were completed. It replaces the stale pre-fix report with
+current residual findings and a smaller execution plan. It does not modify source
+code.
 
 ---
 
 ## Summary
 
-The existing plan is mostly strong and specific. The biggest change in this revision is classification:
+The original Codex audit items are largely implemented:
 
-- Keep the async queue, sync lifecycle, IPC routing, snapshot/tree-data, and storage-ordering issues as the highest-priority work.
-- Split the large "confirmed Gemini batch" into testable workstreams instead of handing it to agents as one bucket.
-- Remove or correct stale/overstated items, especially already-caught queue call sites and the favicon append-index race.
-- Mark native tab-group ungroup behavior as a product decision before implementation.
+- `AsyncQueue.add()`, `deadline()`, async utility conversions, pure utility fixes,
+  sync load lifecycle, snapshot serialization, background hardening, foreground
+  sidebar fixes, and native-group polish are present in the current source.
+- The unit suite has grown from 85 tests to 100 tests and passes.
+- The still-missing validation is environmental: `npm run test.e2e.firefox` and
+  the manual multi-window Firefox matrix from the previous report have not been
+  run in this checkout.
 
----
-
-## P0 - Async Deadlocks And Never-Settling Promises
-
-### A1. `AsyncQueue.add()` can permanently poison the queue
-
-**Status:** Confirmed
-**Severity:** High
-**File:** `src/utils.ts:1182-1221`
-
-The first, non-queued task sets `_waitingQueue = true`, then awaits `fn(...args)` without `try/finally`. If that first task rejects, `_waitingQueue` remains `true` forever, `_processQueue()` is never called, and later tasks stay pending.
-
-Confirmed affected queues:
-
-- `src/services/sync.ts:71`
-- `src/services/sync.bg.ts:23`
-- `src/services/sync.bg.google.ts:24`
-- `src/services/web-req.bg.ts:263,276`
-- `src/services/tabs.fg.move.ts:851,876,924`
-
-**Correction to previous plan:** `src/services/tabs.fg.handlers.ts:687` is already caught in this checkout. Keep the queue fix, but remove that call site from the explicit hardening list.
-
-**Recommended fix:** Wrap the fast path in `try/finally`, make sure queue processing continues after rejection, and preserve rejection to the caller.
-
-**Tests:** First queued action rejects; second action still runs and settles.
-
-### A2. `Sync.load()` waiters can hang on success and failure paths
-
-**Status:** Confirmed
-**Severity:** High
-**File:** `src/services/sync.bg.ts:248-342`
-
-`onLoadHandlers` are resolved only after the full load path completes. The early return path at `ready && !forced && entries.length` resets `loading` and returns `entries`, but it does not resolve handlers queued while `loading === true`. Throwing before the final handler loop has the same shape.
-
-**Recommended fix:** Put `loading` reset and waiter resolution/rejection into a single `finally`-style lifecycle that covers all exits from `_load()`.
-
-**Tests:** Concurrent `load()` calls for early-return, successful full load, and thrown load. Assert no caller remains pending.
-
-### A3. Async-executor antipatterns can leave callers unsettled
-
-**Status:** Confirmed
-**Severity:** Medium
-**Files:**
-
-- `src/utils.ts:466-522` (`parseDragEvent`)
-- `src/utils.ts:747-769` (`loadBinAsBase64`)
-- `src/utils.ts:1004-1022` (`retry`)
-- `src/services/ipc.ts:527` (`request`)
-
-Promises constructed with async executors do not automatically reject the outer promise when the executor throws after an `await`. Realistic examples include `browser.tabs.query()` rejection in drag parsing and `response.blob()` failure in binary loading.
-
-**Recommended fix:** Convert to plain `async` functions or use non-async promise executors with explicit reject handling.
+The new audit found several residual issues worth fixing. The highest-risk items
+are in IPC retry/dedup identity and snapshot tree preservation for windows without
+connected sidebars.
 
 ---
 
-## P1 - IPC Routing And Reconnect Correctness
+## P1 - IPC Retry, Dedup, And Settling
 
-### I1. Connection confirmations are keyed by shared constants
-
-**Status:** Confirmed
-**Severity:** High
-**File:** `src/services/ipc.ts:226,314,850-856`
-
-`connectTo()` uses `-1` or `-2` as the confirmation key for all connections. Concurrent connection attempts from one context can overwrite each other. `onPostMsg()` also hardcodes `msgsWaitingForAnswer.delete(-1)`, leaving stale `-2` waiters.
-
-**Recommended fix:** Generate a unique confirmation id per connection attempt, store it on the connection or closure, and delete the actual id received.
-
-### I2. `dstTabId` is ignored when accepting ports/messages
+### R1. IPC dedup UIDs can collide after a context reload
 
 **Status:** Confirmed
 **Severity:** High
-**File:** `src/services/ipc.ts:652-653,936-939`
+**Files:** `src/services/ipc.ts:520`, `src/services/ipc.ts:637-639`,
+`src/services/ipc.ts:950-975`
 
-The destination window is checked, but destination tab is not. Runtime ports/messages can be accepted by setup/group pages in other tabs when `dstType` matches.
+`request()` assigns `msg.uid` from `_localType`, `_localWinId`, `_localTabId`, and
+a module-local `uidCounter`. The receiver keeps processed UIDs for
+`MSG_CONFIRM_DEADLINE * 2` (120 seconds). If a sidebar/setup/background context
+reloads, `uidCounter` starts from `1` again while the receiver can still have
+cached entries for the same type/window/tab tuple.
 
-**Recommended fix:** Add `dstTabId` filtering in both `onConnect()` and `onSendMsg()` when the local tab id is known.
+That makes a new, unrelated request eligible for dedup as if it were a retry of
+the old request. Because the dedup cache is keyed only by UID, not by action or
+payload, the receiver can return the old cached result or queue the new delivery
+behind an unrelated in-flight action.
 
-### I3. Old port disconnects can reject new-port requests
+**Recommended fix:** Add a per-context random/process nonce to generated UIDs
+(`crypto.randomUUID()` or existing `Utils.uid()` at module init), and store enough
+metadata in `processedMsgs` to assert that duplicate UID, action, destination,
+and argument shape match before replaying a cached answer.
+
+**Tests:** Simulate two messages with the same legacy UID but different actions
+and assert the second is not answered from the first cached result. Simulate a
+same-UID/same-action retry and assert it is still deduped.
+
+### R2. `IPC.request()` still uses an async Promise executor
 
 **Status:** Confirmed
 **Severity:** Medium
-**File:** `src/services/ipc.ts:963-981`
+**File:** `src/services/ipc.ts:582-691`
 
-`resolveUnfinishedCommunications()` matches waiters by `port.name`. Port names are deterministic for a source/destination pair, so an old disconnect can match waiters created for a newer connection.
+The previous audit called out async executors. Most utility cases were fixed, but
+`IPC.request()` still returns `new Promise(async (ok, err) => { ... })`. The
+awaited connection-confirmation paths are mostly wrapped, but synchronous throws
+from `connectTo()` or port access inside the executor can still reject the
+executor's implicit promise while leaving the outer promise unsettled.
 
-**Recommended fix:** Track port identity or a per-connection generation, not only `port.name`.
+**Recommended fix:** Convert `request()` to a plain `async` function that awaits a
+small helper for connection readiness, then returns a non-async promise only for
+the final response timeout. Alternatively keep the promise executor synchronous
+and move all awaited work outside it.
 
-### I4. Request retry semantics can double-execute actions
+**Tests:** Mock `connectTo()` / `browser.runtime.connect()` to throw
+synchronously and assert the caller receives a rejection, not a hung promise.
+
+### R3. Async action tracking still uses a port-name-derived key
 
 **Status:** Confirmed design risk
 **Severity:** Medium
-**File:** `src/services/ipc.ts:615-627`
+**Files:** `src/services/ipc.ts:1002-1016`, `src/services/ipc.ts:1070-1086`
 
-On a confirmation timeout, `request()` resends the same action. If the first delivery executed but the confirmation/result was delayed or lost, non-idempotent actions can run twice.
+`runningAsyncActions` now stores the actual `Port` as the map value and disconnect
+cleanup checks by port identity, which fixes part of the old finding. The map key,
+however, is still `msgId + port.name`, and result delivery only checks whether the
+key exists.
 
-**Recommended fix:** Either add receiver-side dedupe by message id with a TTL, or restrict automatic resend to explicitly idempotent actions.
+If a context reloads and reconnects with the same deterministic port name while
+the old action is still running, message ids can start from `1` again. A key
+collision can let the old action delete the new action's tracking entry or let a
+result be delivered after the tracked port has changed.
+
+**Recommended fix:** Key async actions by a unique per-delivery token, preferably
+the new collision-resistant `msg.uid`, or store a unique record and verify
+`runningAsyncActions.get(asyncActionId) === port` before deleting/sending. Avoid a
+single key that can represent two live actions.
+
+**Tests:** Two same-name mock ports with the same message id should not interfere
+with each other's final responses.
 
 ---
 
 ## P1 - Snapshot, Tree, And Persistence Integrity
 
-### S1. One failed sidebar tree fetch can erase tree/panel data for all windows
+### R4. Missing sidebar connections still flatten background tree data
 
 **Status:** Confirmed
 **Severity:** High
-**File:** `src/services/tabs.bg.ts:558-622`
+**File:** `src/services/tabs.bg.ts:577-587`, `src/services/tabs.bg.ts:602-625`
 
-`updateBgTabsTreeData()` uses `Promise.all()`. One rejection sets `trees = []`, but the function still loops over every window and resets `lvl`, `parentId`, `panelId`, `customTitle`, and `customColor`.
+The previous `Promise.allSettled()` fix prevents one rejected sidebar tree fetch
+from resetting all windows. But a window with no connected sidebar still pushes
+`Promise.resolve([])`. That fulfilled empty tree is then treated as authoritative:
+the code resets every tab in that window to `lvl = 0`, `parentId = NOID`,
+`panelId = NOID`, and clears custom title/color.
 
-**Recommended fix:** Use `Promise.allSettled()`. For windows whose tree fetch failed, skip destructive reset entirely.
+This can still corrupt snapshot/tree persistence for any normal window whose
+sidebar is not connected when `updateBgTabsTreeData()` runs.
 
-### S2. Snapshot create/add/remove are un-serialized read-modify-write paths
+**Recommended fix:** Treat "no connected sidebar" the same as a rejected fetch:
+skip the destructive reset for that window and preserve existing background tab
+metadata. If an explicit flatten operation is needed, make it a separate call.
+
+**Tests:** Build two background windows, connect only one sidebar, call
+`updateBgTabsTreeData()`, and assert the disconnected window keeps its existing
+`parentId`, `panelId`, `customTitle`, and `customColor`.
+
+### R5. Foreground delayed storage can overwrite newer immediate values
 
 **Status:** Confirmed
 **Severity:** Medium
-**File:** `src/services/snapshots.bg.ts:37-151,160-168,520-541`
+**File:** `src/services/storage.fg.ts:13-23`
 
-Concurrent snapshot operations can read the same stored list, mutate independently, and overwrite each other.
+The background storage path now drops overlapping buffered keys before an
+immediate write. The foreground storage proxy still has the old shape:
 
-**Recommended fix:** Serialize snapshot mutations with an `AsyncQueue` after A1 is fixed, or use a dedicated promise chain.
+1. `Store.set({ k: v1 }, 500)` buffers `v1`.
+2. `Store.set({ k: v2 })` sends `v2` to the background immediately.
+3. The delayed foreground timer later sends stale `v1`.
 
-### S3. `storage.bg.set()` delayed/immediate ordering can write stale values
+The timer also calls `_set(storageBuf)` without a `.catch()`, so IPC failures can
+become unhandled rejections.
 
-**Status:** Confirmed
-**Severity:** Medium
-**File:** `src/services/storage.bg.ts:81-91`
+**Recommended fix:** Mirror the background fix in `storage.fg.ts`: for immediate
+writes, delete overlapping keys from `storageBuf`; in delayed flushes, capture the
+buffer into a local object, clear it, and catch/log `_set()` failures.
 
-Sequence:
+**Tests:** Foreground delayed/immediate same-key ordering test with a mocked
+`IPC.bg`.
 
-1. `set({ k: v1 }, 500)` buffers `v1`.
-2. `set({ k: v2 })` writes `v2` immediately.
-3. The delayed flush later writes stale `v1`.
-
-**Recommended fix:** On immediate `_set`, remove overlapping keys from `storageBuf`, or flush buffered state in order before the immediate write.
-
-### S4. Storage listeners are notified before persistence succeeds
+### R6. Storage notifications use request-style IPC without observing failures
 
 **Status:** Confirmed
 **Severity:** Low/Medium
-**File:** `src/services/storage.bg.ts:54-79`
+**Files:** `src/services/storage.bg.ts:58-79`, `src/services/ipc.bg.ts:13-27`
 
-Foreground contexts can apply state that then fails to persist.
+`storage.bg._set()` persists first, then calls `IPC.sidebar()`,
+`IPC.setupPage()`, and `IPC.panelConfigPopup()` as fire-and-forget notifications.
+Those helpers return request promises with 60-second confirmation timeouts. If a
+page closes or the connection is stale, the promise can reject without a handler.
+`ipc.bg.sendToLastFocusedSidebar()` has the same request-as-notification pattern.
 
-**Recommended fix:** Prefer persisting first, then notifying. If existing UX depends on optimistic notification, document it and add failure rollback/logging.
+**Recommended fix:** Use the `sendTo*` helpers for true notifications, or attach
+`.catch()` logging where an answer is still desired.
+
+**Tests:** Mock a rejected IPC request from `storageChanged` and assert no
+unhandled rejection is produced.
 
 ---
 
-## P2 - Background Services And Browser State
+## P2 - Foreground State Correctness
 
-### B1. Proxy reopen path needs failure isolation
-
-**Status:** Confirmed
-**Severity:** High when combined with A1
-**Files:**
-
-- `src/services/web-req.bg.ts:263,276`
-- `src/services/tabs.bg.ts:804-828`
-
-`proxyReqHandler()` returns the queue promise as a blocking response. If `Tabs.reopenTab()` rejects, the queue can be poisoned today, and the blocking request can fail poorly.
-
-**Recommended fix:** Harden `reopenTab()` and catch queue failures in `proxyReqHandler()`, returning `{}` or no proxy decision on failure.
-
-### B2. `handledReqId` is a single global string
+### R7. `History.setAllLoadedState()` writes the wrong variable
 
 **Status:** Confirmed
 **Severity:** Medium
-**File:** `src/services/web-req.bg.ts:20,242-245`
+**Files:** `src/services/history.fg.ts:37-38`,
+`src/services/search.fg.history.ts:12-13`, `src/services/search.fg.history.ts:81-83`
 
-Interleaved `main_frame` requests can overwrite the dedupe marker.
+`setAllLoadedState` currently assigns `ready = r` instead of `allLoaded = r`.
+History search calls `History.setAllLoadedState(false)` before loading filtered
+results, but the real `allLoaded` flag is left unchanged. If full history had
+previously been exhausted, search navigation can think all filtered history is
+already loaded and skip `History.loadMore()`.
 
-**Recommended fix:** Use a bounded `Set`/LRU keyed by request id.
+**Recommended fix:** Change the setter to `allLoaded = r` and add a focused unit
+test around history search/load-more state.
 
-### B3. `ipCheckCtx` is a single global value
-
-**Status:** Confirmed
-**Severity:** Medium
-**File:** `src/services/web-req.bg.ts:26,50-74,226-231`
-
-Concurrent IP checks for different containers can route through the wrong proxy context.
-
-**Recommended fix:** Tie context to a request token or serialize IP checks.
-
-### B4. `onTabRemoved()` leaves ghost tabs on index mismatch
-
-**Status:** Confirmed
-**Severity:** Medium
-**File:** `src/services/tabs.bg.ts:276-307`
-
-On `index === -1 || tab.index !== index`, the function returns without deleting the tab or reinitializing.
-
-**Recommended fix:** Call `reinitTabs('onTabRemoved: index mismatch')`.
-
-### B5. Favicon save can associate icon with previous URL
-
-**Status:** Confirmed
-**Severity:** Medium
-**File:** `src/services/tabs.bg.ts:350-354`
-
-If `change.url` and `change.favIconUrl` arrive together, `Favicons.saveFavicon(tab.url, ...)` runs before `Object.assign(tab, change)`.
-
-**Recommended fix:** Use `change.url ?? tab.url`, or save after assigning URL state.
-
-### B6. Favicon concurrency claim needs demotion
-
-**Status:** Overstated in previous plan
-**Severity:** Low/Needs repro
-**File:** `src/services/favicons.bg.ts:147-165`
-
-The prior report says two concurrent saves can compute the same append index before `await resizeFavicon()`. In this checkout, append index is chosen after the await, so that exact race is not confirmed. There may still be stale hash/domain and max-capacity replacement races.
-
-**Recommended fix:** Do not treat this as a root-cause claim without a repro. If touching favicon save anyway, serializing saves is still reasonable.
-
-### B7. Other confirmed background hardening
+### R8. `Utils.pending()` has the same async-executor shape for throwing checks
 
 **Status:** Confirmed
 **Severity:** Low/Medium
+**File:** `src/utils.ts:1039-1061`
 
-- `openCachedWindow()` crashes on empty cache: `src/services/tabs.bg.ts:147-163`
-- proxy badge debounce is shared across tabs: `src/services/tabs.bg.ts:412-418`
-- `lockedWindowsTabs` is not cleaned in `onWindowRemoved()`: `src/services/windows.bg.ts:250-264`
-- focused window flags can remain stale: `src/services/windows.bg.ts:266-287`
-- `Windows.createWithTabs()` can remove the initial blank tab even if all created tabs failed: `src/services/windows.bg.ts:127-197`
-- `containers.bg.load()` does not handle `contextualIdentities.query()` failure gracefully: `src/services/containers.bg.ts:21-24`
-- container creation sentinel is one string, not a set: `src/services/containers.bg.ts:104-115`
-- snapshot export object URLs are not revoked and download promises are not caught: `src/services/snapshots.bg.ts:184-211`
-- `background.ts` update listener reloads only when `newVersion <= currentVersion`; confirm maintainer intent before changing: `src/bg/background.ts:119-123`
+`pending()` catches `conf.action()` rejections, but `conf.check(result)` runs
+inside an async Promise executor. If `check` throws synchronously, the outer
+promise can remain unsettled.
+
+**Recommended fix:** Convert `pending()` to a plain `async` loop, like `retry()`.
+
+**Tests:** `check()` throws and the returned promise rejects.
 
 ---
 
-## P2 - Foreground And Sidebar Correctness
+## P2 - Background Request/Proxy State
 
-### F1. Unsafe context-menu selector construction
+### R9. `ipCheckCtx` can remain stale after failed or non-intercepted checks
 
-**Status:** Confirmed
-**Severity:** Medium
-**File:** `src/sidebar/components/popup.context-menu.vue:232-235`
-
-The selector interpolates `opt.tooltip ?? opt.label` directly into a CSS selector. Quotes and special selector characters can break lookup.
-
-**Recommended fix:** Use `CSS.escape()`.
-
-### F2. Native drag event uses `clientX` as Y coordinate
-
-**Status:** Confirmed
+**Status:** Plausible/confirmed by code path
 **Severity:** Low/Medium
-**File:** `src/services/drag-and-drop.fg.ts:517-520`
+**File:** `src/services/web-req.bg.ts:61-128`, `src/services/web-req.bg.ts:243-249`
 
-`y: e.clientX` should be `y: e.clientY`.
+IP checks are now serialized, which fixes the original cross-container clobber.
+But `ipCheckCtx` is cleared only inside `proxyReqHandler()` when a matching
+background XHR is intercepted and a proxy exists. If the fetch fails before the
+handler consumes the marker, if interception does not happen, or if the proxy
+config is removed mid-check, the marker can survive past the check.
 
-### F3. Selection range assumes tab indexes are valid
+**Recommended fix:** Clear `ipCheckCtx` in a `finally` block when it still matches
+the check's container after the fetch attempt completes. Keep the existing handler
+clear for the normal consumed path.
 
-**Status:** Confirmed
+### R10. Auto-reopen suppression is a single global container marker
+
+**Status:** Confirmed design risk
 **Severity:** Low/Medium
-**File:** `src/services/selection.fg.ts:229-253`
+**Files:** `src/services/web-req.bg.ts:40-58`,
+`src/services/tabs.fg.create.ts:538-559`,
+`src/sidebar/components/bar.new-tab.vue:365-383`
 
-`Tabs.list[maxIndex]` and `Tabs.list[i]` are unguarded.
+`disableAutoReopening()` stores one `disableReopeningForContainer` string. Two
+overlapping "reopen/open in container" operations for different containers can
+overwrite or clear each other's suppression window. That can allow reopen rules to
+fire during an intentional container move.
 
-**Recommended fix:** Guard missing tabs and reset/reinit selection state on stale indexes.
+**Recommended fix:** Replace the single string with a map/set keyed by container,
+with per-container timers or reference counts.
 
-### F4. Group page update can skip non-tab updates
+---
+
+## P3 - Lower-risk Hardening
+
+### R11. Favicon saves still have residual concurrency races
+
+**Status:** Confirmed residual risk
+**Severity:** Low
+**File:** `src/services/favicons.bg.ts:117-181`
+
+The old append-index claim was correctly demoted, but saves are still not
+serialized. `hashes.indexOf(hash)`, `domainInfo`, and random replacement decisions
+can go stale across the `await resizeFavicon()` gap. The usual result is duplicate
+icon slots or wasted capacity; at the max-count limit, concurrent random
+replacement can still leave one domain pointing at another saved icon.
+
+**Recommended fix:** If favicon persistence is touched again, serialize the
+mutation section with an `AsyncQueue` or recompute hash/domain/replacement state
+after resizing.
+
+### R12. Some fire-and-forget browser/API calls still lack rejection handling
 
 **Status:** Confirmed
 **Severity:** Low
-**File:** `src/page.group/group.ts:161-197`
+**Examples:**
 
-`if (!newTabEl) return` prevents title/window updates too. The splice loop also mutates while incrementing and can leave stale elements.
+- `src/services/tabs.bg.ts:560-567` calls `Store.set()` from a timer without
+  catching persistence failure.
+- `src/services/tabs.bg.ts:399` calls `browser.tabs.reload(tab.id)` without
+  catching missing-tab errors.
+- Several UI activation paths call `browser.tabs.update(...)` without catching;
+  these are mostly user-action best-effort calls.
 
-**Recommended fix:** Move the `newTabEl` guard inside the `upd.tabs` handling and replace the splice loop with a safe removal pattern.
-
-### F5. Other confirmed foreground hardening
-
-**Status:** Confirmed
-**Severity:** Low/Medium
-
-- `containers.fg.saveContainer()` ignores the `delay` value in `setTimeout`: `src/services/containers.fg.ts:71`
-- `tabs.fg.move.ts` has uncaught `browser.tabs.update(...openerTabId...)` calls: `src/services/tabs.fg.move.ts:206-208,251-252`
-- `srcPanelId` in tab move is overwritten by the last moved tab; use a set and recalc all affected panels: `src/services/tabs.fg.move.ts:230-233`
-- `bufTabActivatedEventIndex` should be reset when deferred events are cleared/replayed: `src/services/tabs.fg.handlers.ts:105-106`, `src/services/tabs.fg.handlers.ts:1651-1665`
-- `BkmNode.rmChildByIndex()` should reject `index >= length`, not only `index > length`: `src/services/bookmarks.fg.ts:254-263`
-
----
-
-## P2 - Pure Utility Correctness
-
-**Status:** Confirmed
-**Severity:** Low/Medium
-**File:** `src/utils.ts`
-
-Fix with table-driven unit tests:
-
-- `deadline()` does not clear the timeout after promise settlement: `src/utils.ts:120-124`
-- `toRGBA()` uses red percentage for green/blue percentage channels: `src/utils.ts:291,297`
-- `HEXA_RE` uses `[0-f]`, accepting invalid characters and partial parse behavior: `src/utils.ts:269-270`
-- `decodeUrlPunycode()` only handles URLs that start with `xn--`, not per-label punycode: `src/utils.ts:962-967`
-- `isRegExp(null)` / `isRegExp(undefined)` throws: `src/utils.ts:993-995`
-- `withoutEmptyFolders()` assumes parents precede children: `src/utils.ts:1268-1291`
-- `colorFromString()` ignores the last character of odd-length strings: `src/utils.ts:250-265`
-
-False positives/overstated items to avoid:
-
-- `sameStart()` length check is not a behavior bug.
-- `getSnapInterval()` not supporting `sec` is not a bug because options are `min`, `hr`, `day`.
-- `pendingProxyAuthRequests` is cleared on handler refresh; not a permanent leak.
-- `incHistory` is bounded by container count; stale cleanup is optional.
-- `reloadingTabs` is local to the bulk reload interval; low impact.
-
----
-
-## Product Decision - Native Tab Groups
-
-### N1. Ungrouping a native group includes the Sidebery group page
-
-**Status:** Product decision required
-**File:** `src/services/tabs.fg.native-groups.ts:347-354`
-
-`ungroupNativeGroup()` includes the Sidebery group page tab. That may intentionally preserve a legacy Sidebery group, or it may be unwanted clutter.
-
-Decide before implementing:
-
-- Close the Sidebery group page when ungrouping native tabs.
-- Preserve it and document that ungroup converts to a Sidebery group.
-- Offer both actions separately.
-
-### N2. Native group page creation and title sync hardening
-
-**Status:** Confirmed
-**Severity:** Medium
-**Files:** `src/services/tabs.fg.native-groups.ts`, `src/sidebar/components/panel.tabs.vue`
-
-Fix after N1 decision:
-
-- Clean up `newTabPosition` if group page creation fails.
-- Guard `groupPage.id` before grouping/moving.
-- Observe/log the `setTimeout(...createSideberyGroupPage...)` promise.
-- Preserve the IPPC hash suffix when syncing group page title.
-- Replace `window.prompt()` with the project popup/input UI.
-- Use a native-group rename i18n key instead of `editBookmarkTitle`.
-- Optimize native-group rails/header computation from repeated scans to one linear pass.
-- De-dupe `g:${groupId}` keys if visual groups become non-contiguous.
+**Recommended fix:** Add `.catch()` logging to background persistence/tabs calls
+where failure can leave cached state stale. UI-only activation calls can be
+batched into a smaller opportunistic cleanup.
 
 ---
 
 ## Revised Execution Plan
 
-General rules for every workstream:
+### WS-H - IPC Identity And Settling
 
-1. One workstream per branch/PR.
-2. Keep diffs narrow and follow existing style.
-3. Add tests where feasible.
-4. Run `npm test`, `npm run lint`, and `npm run build` before declaring the workstream complete.
-5. Do not fix items explicitly marked false positive or product-decision-only.
+**Scope:** `src/services/ipc.ts`, `src/types/ipc.ts`, IPC tests/mocks.
 
-### WS-A - Async Core First
+1. Make `Message.uid` collision-resistant across context reloads.
+2. Include action/destination metadata in processed-message dedup validation.
+3. Replace `runningAsyncActions` keying with a per-delivery identity.
+4. Convert `request()` away from an async promise executor.
+5. Add regression tests for retry dedup, reload UID collision, and sync throw
+   settling.
 
-**Scope:** `src/utils.ts`, real queue call sites.
+**Acceptance:** Unit tests for IPC retry/dedup behavior plus the manual Firefox
+matrix from the original WS-C.
 
-1. Fix `AsyncQueue.add()` exception safety.
-2. Fix `deadline()`.
-3. Convert `retry`, `parseDragEvent`, and `loadBinAsBase64` away from async executors.
-4. Catch real uncaught queue call sites, especially `web-req.bg.ts` and `tabs.fg.move.ts`.
-5. Catch/log `Sync.save()` in `settings.bg.ts`.
+### WS-I - Persistence Follow-up
 
-**Acceptance:** Unit tests for rejected first queue task, queue recovery, and async error settling.
+**Scope:** `tabs.bg.ts`, `storage.fg.ts`, `storage.bg.ts`, `ipc.bg.ts`,
+`history.fg.ts`, `search.fg.history.ts`, `utils.ts`.
 
-### WS-B - Sync Lifecycle
+1. Preserve background tab tree data when no sidebar is connected.
+2. Mirror delayed/immediate storage ordering fixes in foreground storage.
+3. Convert storage notifications to send-style IPC or catch request failures.
+4. Fix `History.setAllLoadedState()`.
+5. Convert `Utils.pending()` to a plain async function.
 
-**Scope:** `src/services/sync.bg.ts`, `src/services/sync.ts`, `src/services/sync.bg.google.ts`.
-**Depends on:** WS-A.
+**Acceptance:** Unit tests for tree preservation, foreground storage ordering,
+history all-loaded reset, and `pending()` throw behavior.
 
-1. Make `load()` / `_load()` resolve or reject waiters on every path.
-2. Reset `loading` reliably.
-3. Make `IPC.sidebars()` usage safe for notifications.
-4. Update local `entries` in `removeByType()`.
-5. Audit all sync queue callers for rejection handling.
+### WS-J - Request/Proxy And Low-risk Hardening
 
-**Acceptance:** Unit tests for concurrent load success, early-return, and throw paths.
+**Scope:** `web-req.bg.ts`, `favicons.bg.ts`, selected background timers.
 
-### WS-C - IPC Isolation
+1. Clear stale `ipCheckCtx` on all IP-check exits.
+2. Replace single auto-reopen suppression marker with per-container state.
+3. Serialize or recompute favicon mutation state after resize.
+4. Add catches to background fire-and-forget persistence/browser calls.
 
-**Scope:** `src/services/ipc.ts`.
-
-1. Unique confirmation ids per connection attempt.
-2. Delete the actual confirmation id received.
-3. Add `dstTabId` checks in port and runtime-message handling.
-4. Use port identity/generation in unfinished communication cleanup.
-5. Decide and implement request retry/dedupe policy.
-6. Fix `getPortErrorMessage()` to check `remotePort`.
-7. Accept falsy args in `runActionFor()` with `msg.arg !== undefined`.
-
-**Acceptance:** Manual Firefox matrix: 3+ windows, multiple group/setup pages, background reload, reconnect, and targeted messages only reaching intended context.
-
-### WS-D - Persistence And Background State
-
-**Scope:** `storage.bg.ts`, `snapshots.bg.ts`, `tabs.bg.ts`, `windows.bg.ts`, `web-req.bg.ts`, `containers.bg.ts`, `settings.bg.ts`, `background.ts`.
-**Depends on:** WS-A for serialization primitives.
-
-1. Fix storage delayed/immediate ordering.
-2. Decide storage notification ordering and add tests/logging.
-3. Serialize snapshot mutations.
-4. Fix `updateBgTabsTreeData()` with `Promise.allSettled()`.
-5. Harden `reopenTab()` and proxy blocking responses.
-6. Replace `handledReqId` with bounded recent-id tracking.
-7. Remove `ipCheckCtx` global race.
-8. Reinit on tab-remove index mismatch.
-9. Fix cached-window empty cache, proxy badge debounce, window lock cleanup, focused flags, and all-failed window creation.
-10. Catch containers-disabled load failure.
-11. Replace single container `creating` marker with a set.
-12. Revoke snapshot export object URLs and catch downloads.
-13. Confirm update-reload intent before changing `onUpdateAvailable`.
-
-**Acceptance:** Storage ordering unit test, snapshot concurrency test where feasible, and manual snapshot/restore exercise.
-
-### WS-E - Pure Utils
-
-**Scope:** `src/utils.ts`.
-
-Fix `toRGBA`, punycode, hex regex, `isRegExp`, `withoutEmptyFolders`, and optionally `colorFromString`.
-
-**Acceptance:** Table-driven unit tests for each utility.
-
-### WS-F - Foreground Sidebar Fixes
-
-**Scope:** `src/services/*.fg.ts`, `src/sidebar/components/popup.context-menu.vue`, `src/page.group/group.ts`.
-
-1. Use `CSS.escape()` in context menu selectors.
-2. Fix native drag `clientY`.
-3. Add selection guards.
-4. Fix group page update guard and splice loop.
-5. Fix `containers.fg.saveContainer()` delay.
-6. Catch opener-tab update calls.
-7. Track all source panels during tab move.
-8. Reset deferred activation buffer when deferred events are cleared/replayed.
-9. Fix bookmark `rmChildByIndex()` boundary.
-
-**Acceptance:** Unit tests where existing mocks allow it, plus manual sidebar smoke test for drag/drop, context menu keyboard nav, and cross-panel moves.
-
-### WS-G - Native Groups
-
-**Scope:** `tabs.fg.native-groups.ts`, `panel.tabs.vue`, native group components/tests.
-
-1. Resolve Sidebery group-page ungroup policy.
-2. Fix group-page creation cleanup and id guards.
-3. Preserve IPPC hash suffix on title sync.
-4. Replace `window.prompt()` with app UI.
-5. Add correct i18n key.
-6. Optimize rails/header computation.
-7. De-dupe group header keys.
-
-**Acceptance:** Extend existing native-group unit tests and Firefox e2e for rename, ungroup, collapse, and group page channel survival.
-
----
-
-## Suggested Sequencing
-
-```text
-WS-A (async core)
-  -> WS-B (sync)
-  -> WS-D (persistence/background)
-
-WS-C (IPC) runs alone with review time.
-
-WS-E (pure utils) can run anytime.
-WS-F (foreground) can run after WS-A or in parallel if queue call sites are coordinated.
-WS-G (native groups) waits for product decision on ungroup behavior.
-```
+**Acceptance:** Focused unit tests where mocks exist, plus manual container proxy
+checks with two containers and overlapping reopen operations.
 
 ---
 
 ## Final Verification Gate
 
-After all workstreams merge:
+After WS-H through WS-J:
 
 1. `npm test`
 2. `npm run lint`
 3. `npm run build`
 4. `npm run test.e2e.firefox`
-5. Manual scenario:
+5. Manual Firefox scenario:
    - 3 windows
    - 200+ tabs
+   - at least one window without an open/connected sidebar
    - multiple setup/group pages
    - containers with proxy and reopen rules
+   - overlapping "reopen in container" operations
    - snapshot create/restore
-   - sync save while network is offline, then online recovery
-   - background reload/reconnect during pending IPC requests
+   - sync save while offline, then online recovery
+   - background/sidebar reload during pending IPC requests

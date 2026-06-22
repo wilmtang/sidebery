@@ -188,6 +188,12 @@ export function onNativeGroupMembershipChanged(
 
   Sidebar.recalcVisibleTabs(tab.panelId)
   Sidebar.updatePanelBoundsDebounced(128)
+
+  // The group header's count is derived from getNativeGroupTabs(), which reads
+  // the plain (non-reactive) tab.groupId field gated on nativeGroupsVersion.
+  // Membership changes don't touch nativeGroups itself, so bump the version
+  // here to recompute the header count when tabs join/leave via the browser API.
+  bumpVersion()
 }
 
 export function isNativeGroupCollapsed(groupId?: ID): boolean {

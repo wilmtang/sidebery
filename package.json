@@ -29,7 +29,7 @@
     "release-notes": "node build/release-notes.js",
     "release.nightly": "node build/release-nightly.js",
     "test": "vitest run",
-    "test.e2e.firefox": "npm run build && node --test tests/e2e/firefox-native-groups.test.mjs",
+    "test.e2e.firefox": "npm run build && node --test tests/e2e/*.test.mjs",
     "test.watch": "vitest watch"
   },
   "author": "mbnuqw",
