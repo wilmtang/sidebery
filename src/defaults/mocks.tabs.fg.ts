@@ -94,6 +94,7 @@ export class MTab implements Tab {
   openerTabId?: ID | undefined
   pinned: boolean = false
   sessionId?: string | undefined
+  splitViewId?: number | undefined
   status?: string | undefined
   successorTabId?: ID | undefined
   title: string = 'New Tab'

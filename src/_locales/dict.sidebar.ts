@@ -1270,6 +1270,17 @@ export const sidebarTranslations: Translations = {
     zh_TW: '預設',
     ja: 'デフォルト',
   },
+  'colors.gray': {
+    en: 'Default',
+    de: 'Standard',
+    fr: 'Par défaut',
+    hu: 'alapértelmezett',
+    pl: 'Domyślny',
+    ru: 'Стандартный',
+    zh_CN: '默认',
+    zh_TW: '預設',
+    ja: 'デフォルト',
+  },
   'colors.blue': {
     en: 'Blue',
     de: 'Blau',
@@ -1281,9 +1292,6 @@ export const sidebarTranslations: Translations = {
     zh_TW: '藍色',
     ja: '青色',
   },
-  'colors.cyan': {
-    en: 'Cyan',
-  },
   'colors.turquoise': {
     en: 'Turquoise',
     de: 'Türkis',
@@ -1294,6 +1302,17 @@ export const sidebarTranslations: Translations = {
     zh_CN: '青绿色',
     zh_TW: '青綠色',
     ja: 'ターコイズ',
+  },
+  'colors.cyan': {
+    en: 'Cyan',
+    de: 'Cyan',
+    fr: 'Cyan',
+    hu: 'cián',
+    pl: 'Cyjan',
+    ru: 'Циан',
+    zh_CN: '青色',
+    zh_TW: '青色',
+    ja: 'シアン',
   },
   'colors.green': {
     en: 'Green',

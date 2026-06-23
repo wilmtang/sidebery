@@ -182,6 +182,11 @@ function tryDecodeUrl(url: string): string {
 // -
 
 async function showPPreview(tab: Tab, y?: number) {
+  if (deadOnArrival) {
+    deadOnArrival = false
+    closePPreview()
+  }
+
   state.status = Status.Opening
   const result = await injectPPreview(tab.id, y)
   if (result?.[0]) {
@@ -325,6 +330,12 @@ export async function closePPreview() {
 
 let sPreviewTabId = NOID
 async function showSPreview(tab: Tab) {
+  if (deadOnArrival) {
+    deadOnArrival = false
+    closeSPreview()
+    return
+  }
+
   if (sPreviewTabId === tab.id) return
   if (!sPreviewEl) return
 

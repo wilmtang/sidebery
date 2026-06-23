@@ -170,7 +170,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   previewTabsTitle: 2,
   previewTabsUrl: 1,
   previewTabsSide: 'right',
-  previewTabsDelay: 500,
+  previewTabsDelay: 450,
   previewTabsFollowMouse: true,
   previewTabsInPageOffsetY: 0,
   previewTabsInPageOffsetX: 0,

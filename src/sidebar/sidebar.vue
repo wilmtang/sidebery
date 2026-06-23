@@ -80,7 +80,7 @@
           v-for="(panel, i) in panels"
           :key="panel.id"
           :is="getPanelComponent(panel)"
-          :data-pos="getPanelPos(i, panel.id)"
+          :data-pos="panel.reactive.pos"
           :panel="panel")
 
       Transition(name="bottom-bar")
@@ -212,6 +212,7 @@ function recalcStaticVars() {
 }
 
 Sidebar.setReMountSidebarFn(() => {
+  Sidebar.resetPanelsPos()
   Sidebar.rememberActivePanelScrollPosition()
   recalcStaticVars()
   rrc.value++
@@ -429,16 +430,6 @@ function onMouseUp(e: MouseEvent): void {
     }
     Menu.open(type, e.clientX, e.clientY)
   }
-}
-
-type PanelPosition = 'left' | 'center' | 'right'
-function getPanelPos(i: number, panelId: ID): PanelPosition {
-  if (panelId === Sidebar.reactive.activePanelId) return 'center'
-  if (i === -1) return 'right'
-
-  const activePanel = Sidebar.panelsById[Sidebar.activePanelId]
-  if (activePanel && i > activePanel.index) return 'right'
-  else return 'left'
 }
 
 let onBSPBDragLeaveTimeout: number | undefined
